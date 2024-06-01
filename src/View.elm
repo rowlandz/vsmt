@@ -14,6 +14,8 @@ import Event exposing (Event)
 import Tactics.All
 import Tactic exposing (Tactic)
 import Event exposing (Event(..))
+import Canvas exposing (CTopLevelExpr)
+import Data.Typechecked exposing (exprTToString)
 
 view : Model -> Html Event
 view model = Element.layout [] (mainElement model)
@@ -39,7 +41,7 @@ headerStrip =
     ]
 
 tacticSelection : Model -> Element Event
-tacticSelection model =
+tacticSelection _ =
   column [ width fill, height fill ] (List.map tacticButton Tactics.All.all)
 
 tacticButton : Tactic -> Element Event
@@ -51,7 +53,7 @@ tacticButton tac =
 
 messageBox : Model -> Element Event
 messageBox model =
-  el [ width fill, height fill ]
+  el [ width fill, height fill, Font.family [ Font.monospace ] ]
     (text model.messagePanelText)
 
 canavsHistory : Model -> Element Event
@@ -70,8 +72,8 @@ viewCanvas canvas =
     , Background.color (rgb255 200 200 200)
     ]
     (case canvas of
-        Canvas.MkCEntry c -> cEntry c
-        Canvas.MkCTopLevelExpr -> text "CTopLevelExpr"
+      Canvas.MkCEntry c -> cEntry c
+      Canvas.MkCTopLevelExpr c -> cTopLevelExpr c
     )
 
 cEntry : CEntry -> Element Event
@@ -132,3 +134,10 @@ varEntry idx (varName, varType) =
         , label = text "Delete"
         }
     ]
+
+
+
+cTopLevelExpr : CTopLevelExpr -> Element Event
+cTopLevelExpr canvas =
+  el [ Font.family [ Font.monospace ] ]
+    (text (exprTToString canvas.expr))

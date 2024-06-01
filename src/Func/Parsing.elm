@@ -1,13 +1,11 @@
-module Parsed exposing
-  ( ParsedExp(..), parseExp
-  , ParsedType, parseType
-  , ParsedSort
-  , Location
+module Func.Parsing exposing
+  ( parseExp
+  , parseType
+  , parseSymbol
   )
 
-{-| Contains parsers and data structures for the things the
-user inputs as text. Namely `ParsedExp` for the main expression
-and `ParsedType` for the types of variables.
+{-| Contains parsers for user input, namely for expressions,
+function types, and symbols.
 -}
 
 import Parser exposing
@@ -15,13 +13,18 @@ import Parser exposing
   , backtrackable, chompIf, chompWhile, getChompedString, getPosition
   , lazy, oneOf, sequence, spaces, succeed, token
   )
+import Data.Parsed exposing (..)
 
 
 
-type alias Location =
-  { start : ( Int, Int )
-  , end : ( Int, Int )
-  }
+parseSymbol : String -> Result String String
+parseSymbol =
+  Parser.run
+    (succeed identity
+      |. spaces
+      |= symbol
+      |. spaces
+    ) >> Result.mapError Parser.deadEndsToString
 
 symbol : Parser String
 symbol = getChompedString (chompIf isSymbolChar |. chompWhile isSymbolChar)
@@ -35,19 +38,14 @@ isSymbolChar c =
 -- ParsedExp
 
 
-type ParsedExp
-  = SSymb Location String
-  | SList Location (List ParsedExp)
-
 parseExp : String -> Result String ParsedExp
-parseExp s =
+parseExp =
   Parser.run
     (succeed identity
       |. spaces
       |= exp
       |. spaces
-    ) s
-    |> Result.mapError Parser.deadEndsToString
+    ) >> Result.mapError Parser.deadEndsToString
 
 exp : Parser ParsedExp
 exp =
@@ -73,27 +71,15 @@ exp =
 
 -- ParsedType
 
-
-type alias ParsedType =
-  { paramSorts : List ParsedSort
-  , retSort : ParsedSort
-  , loc : Location
-  }
-
-type alias ParsedSort =
-  { name : String
-  , loc : Location
-  }
   
-parseType : String -> Result String ParsedType
-parseType s =
+parseType : String -> Result (List String) ParsedType
+parseType =
   Parser.run
     (succeed identity
       |. spaces
       |= funcType
       |. spaces
-    ) s
-    |> Result.mapError Parser.deadEndsToString
+    ) >> Result.mapError (Parser.deadEndsToString >> List.singleton)
 
 funcType : Parser ParsedType
 funcType =

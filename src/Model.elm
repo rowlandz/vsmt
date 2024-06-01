@@ -16,7 +16,7 @@ initialModel =
   { currentCanvas =
       Canvas.MkCEntry
         { uninterpretedSorts = Array.fromList [ "S" ]
-        , variables = Array.fromList [ ("x", "real"), ("y", "real") ]
+        , variables = Array.fromList [ ("x", "Real"), ("y", "Real"), ("z", "Real") ]
         , expr = "(and (= x y) (= y z) (not (= x z)))"
         }
   , canvasHistory = []
