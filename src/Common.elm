@@ -1,5 +1,34 @@
 module Common exposing (..)
 
+
+
+-- Extra `Maybe` functions
+
+
+{-| Returns `this` if it's `Just` a value, otherwise computes `lazyThat`. -}
+orElse : (() -> Maybe a) -> Maybe a -> Maybe a
+orElse lazyThat this =
+  case this of
+    Just a -> Just a
+    Nothing -> lazyThat ()
+
+{-| Repeatedly applies `f` to `a1` as long as it returns `Just` a value. -}
+greedy : (a -> Maybe a) -> a -> a
+greedy f a1 =
+  case f a1 of
+    Nothing -> a1
+    Just a2 -> greedy f a2
+
+{-| Repeatedly applies `f` to `a1` as long as it returns `Just` a value.
+Returns `Nothing` if `f` immediately returns `Nothing`. -}
+greedy1 : (a -> Maybe a) -> a -> Maybe a
+greedy1 f a1 = Maybe.map (greedy f) (f a1)
+
+
+
+-- Extra `Result` functions
+
+
 {-| Same as Result.andThen with the argument order flipped. -}
 resultBind : Result err a -> (a -> Result err b) -> Result err b
 resultBind result andThen =
@@ -68,3 +97,20 @@ resultsPartition results =
     (Ok succ :: t) ->
       let (es, ss) = resultsPartition t
       in  (es, succ :: ss)
+
+
+
+-- Extra `List` functions
+
+
+{-| Splits `l` into two lists at the first element satisfying `predicate`. -}
+listSplitOnFirst : (a -> Bool) -> List a -> Maybe ( List a, a, List a )
+listSplitOnFirst predicate l =
+  case l of
+    [] -> Nothing
+    (x::xs) ->
+      if predicate x then
+        Just ( [], x, xs )
+      else
+        listSplitOnFirst predicate xs
+        |> Maybe.map (\( l1, y, l2 ) -> ( x::l1, y, l2 ))

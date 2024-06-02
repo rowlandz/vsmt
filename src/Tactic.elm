@@ -1,4 +1,5 @@
 module Tactic exposing (..)
+
 import Canvas exposing (Canvas)
 
 type alias Tactic =

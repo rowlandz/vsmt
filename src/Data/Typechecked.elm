@@ -11,8 +11,14 @@ import Data.Parsed exposing (Location)
 -}
 type ExprT = ExprT String Sort (List ExprT)
 
+getHead : ExprT -> String
+getHead (ExprT head _ _) = head
+
 getSort : ExprT -> Sort
 getSort (ExprT _ sort _) = sort
+
+getSubs : ExprT -> List ExprT
+getSubs (ExprT _ _ subs) = subs
 
 exprTToString : ExprT -> String
 exprTToString (ExprT head _  children) =

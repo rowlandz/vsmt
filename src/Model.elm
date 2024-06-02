@@ -15,9 +15,9 @@ initialModel : Model
 initialModel =
   { currentCanvas =
       Canvas.MkCEntry
-        { uninterpSorts = Array.fromList [ "S" ]
-        , variables = Array.fromList [ ("x", "Real"), ("y", "Real"), ("z", "Real") ]
-        , expr = "(and (= x y) (= y z) (not (= x z)))"
+        { uninterpSorts = Array.fromList [ ]
+        , variables = Array.fromList [ ("x", "Bool"), ("y", "Bool"), ("z", "Bool") ]
+        , expr = "(not (and x (or y (not z))))"
         }
   , canvasHistory = []
   , messagePanelText = ""
