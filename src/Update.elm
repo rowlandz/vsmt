@@ -10,18 +10,30 @@ import Tactic exposing (Tactic)
 update : Event -> Model -> Model
 update event model =
   case event of
-
-    UserChangedText newText ->
+    
+    UserAddedSort ->
       case model.currentCanvas of
         MkCEntry entry ->
-          { model | currentCanvas = MkCEntry { entry | expr = newText } }
+          { model | currentCanvas = MkCEntry { entry | uninterpSorts = Array.push "" entry.uninterpSorts } }
         _ -> model
-    
+
     UserChangedSortName idx newName ->
       case model.currentCanvas of
         MkCEntry entry ->
-          let newSorts = Array.set idx newName entry.uninterpretedSorts
-          in  { model | currentCanvas = MkCEntry { entry | uninterpretedSorts = newSorts } }
+          let newSorts = Array.set idx newName entry.uninterpSorts
+          in  { model | currentCanvas = MkCEntry { entry | uninterpSorts = newSorts } }
+        _ -> model
+
+    UserDeletedSort idx ->
+      case model.currentCanvas of
+        MkCEntry entry ->
+          { model | currentCanvas = MkCEntry { entry | uninterpSorts = arrayDeleteNth idx entry.uninterpSorts } }
+        _ -> model
+
+    UserAddedVar ->
+      case model.currentCanvas of
+        MkCEntry entry ->
+          { model | currentCanvas = MkCEntry { entry | variables = Array.push ( "", "" ) entry.variables } }
         _ -> model
 
     UserChangedVarName idx newName ->
@@ -44,16 +56,16 @@ update event model =
             Nothing -> model
         _ -> model
 
+    UserChangedText newText ->
+      case model.currentCanvas of
+        MkCEntry entry ->
+          { model | currentCanvas = MkCEntry { entry | expr = newText } }
+        _ -> model
+
     UserDeletedVar idx ->
       case model.currentCanvas of
         MkCEntry entry ->
           { model | currentCanvas = MkCEntry { entry | variables = arrayDeleteNth idx entry.variables } }
-        _ -> model
-
-    UserAddedVar ->
-      case model.currentCanvas of
-        MkCEntry entry ->
-          { model | currentCanvas = MkCEntry { entry | variables = Array.push ( "", "" ) entry.variables } }
         _ -> model
 
     UserClickedTactic tacName ->

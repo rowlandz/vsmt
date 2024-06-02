@@ -32,6 +32,13 @@ type Sort
   | RealSort
   | UninterpSort String
 
+sortToString : Sort -> String
+sortToString sort =
+  case sort of
+    BoolSort -> "Bool"
+    RealSort -> "Real"
+    UninterpSort s -> s
+
 {-| The "type" of a function.
 -}
 type alias FuncType =

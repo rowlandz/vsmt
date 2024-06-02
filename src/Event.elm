@@ -1,10 +1,12 @@
 module Event exposing (..)
 
 type Event
-  = UserChangedText String
+  = UserAddedSort
   | UserChangedSortName Int String
+  | UserDeletedSort Int
+  | UserAddedVar
   | UserChangedVarName Int String
   | UserChangedVarType Int String
   | UserDeletedVar Int
-  | UserAddedVar
+  | UserChangedText String
   | UserClickedTactic String

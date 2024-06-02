@@ -40,6 +40,6 @@ The substring _includes_ the char at `start` and _excludes_ the char at `end`.
 Rows and columns are indexed starting with `1`.
 -}
 type alias Location =
-  { start : ( Int, Int )
-  , end : ( Int, Int )
+  { start : Int
+  , end : Int
   }

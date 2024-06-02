@@ -10,7 +10,7 @@ function types, and symbols.
 
 import Parser exposing
   ( Parser, (|.), (|=)
-  , backtrackable, chompIf, chompWhile, getChompedString, getPosition
+  , backtrackable, chompIf, chompWhile, getChompedString, getOffset
   , lazy, oneOf, sequence, spaces, succeed, token
   )
 import Data.Parsed exposing (..)
@@ -51,11 +51,11 @@ exp : Parser ParsedExp
 exp =
   oneOf
     [ succeed (\b s e -> SSymb { start = b, end = e } s)
-        |= getPosition
+        |= getOffset
         |= symbol
-        |= getPosition
+        |= getOffset
     , succeed (\b l e -> SList { start = b, end = e } l)
-        |= getPosition
+        |= getOffset
         |= sequence
             { start = "("
             , separator = ""
@@ -64,14 +64,19 @@ exp =
             , item = lazy (\_ -> exp)
             , trailing = Parser.Forbidden
             }
-        |= getPosition
+        |= getOffset
     ]
 
 
 
 -- ParsedType
 
-  
+{-| Parse a sort or function type like one of these:
+
+    Real
+    Real -> Bool
+    (Real Real) -> Bool
+-}
 parseType : String -> Result (List String) ParsedType
 parseType =
   Parser.run
@@ -85,7 +90,7 @@ funcType : Parser ParsedType
 funcType =
   oneOf
     [ succeed (\b p r e -> { paramSorts = p, retSort = r, loc = { start = b, end = e } })
-        |= getPosition
+        |= getOffset
         |= sequence
             { start = "("
             , separator = ""
@@ -98,13 +103,13 @@ funcType =
         |. token "->"
         |. spaces
         |= sort
-        |= getPosition
+        |= getOffset
     , succeed
         (\b p r e -> case r of
           Just s -> { paramSorts = [p], retSort = s, loc = { start = b, end = e } }
           Nothing -> { paramSorts = [], retSort = p, loc = { start = b, end = e } }
         )
-        |= getPosition
+        |= getOffset
         |= sort
         |= backtrackable
             (oneOf
@@ -116,12 +121,12 @@ funcType =
               , succeed Nothing
               ]
             )
-        |= getPosition
+        |= getOffset
     ]
 
 sort : Parser ParsedSort
 sort =
   succeed (\b s e -> { name = s, loc = { start = b, end = e } })
-    |= getPosition
+    |= getOffset
     |= symbol
-    |= getPosition
+    |= getOffset

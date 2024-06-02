@@ -4,8 +4,9 @@ module Func.Typechecking exposing (typecheckExp)
 -}
 
 import Dict
+import Common exposing (allMustSucceed, andCheck, yielding)
 import Data.Parsed exposing (Location, ParsedExp, ParsedExp(..), getLoc)
-import Data.Typechecked exposing (..)
+import Data.Typechecked exposing (Sort(..), ExprT(..), TCErr(..), VarContext, getSort)
 
 typecheckExp : VarContext -> ParsedExp -> Result (List TCErr) ExprT
 typecheckExp ctx pe =
@@ -16,60 +17,65 @@ typecheckExp ctx pe =
         Just xSort -> Ok (ExprT x xSort [])
         Nothing -> Err [ UndeclaredSymbol loc ]
 
-    SList _ (SSymb fLoc f :: tail) ->
-      tail |> List.map (typecheckExp ctx) |> allMustSucceed
-      |> Result.map (\tailExps -> List.map2 (\e1 e2 -> (e1, getLoc e2)) tailExps tail)
-      |> Result.andThen (typecheckApp f fLoc)
+    SList _ (SSymb fLoc f :: args) ->
+      let argLocs = List.map getLoc args in
+      allMustSucceed (List.map (typecheckExp ctx) args)
+      |> Result.map (\argEs -> List.map2 Tuple.pair argEs argLocs)
+      |> Result.andThen (typecheckApp ctx f fLoc)
 
     SList loc _ -> Err [ UnknownExpressionForm loc ]
 
-typecheckApp : String -> Location -> List ( ExprT, Location ) -> Result (List TCErr) ExprT
-typecheckApp f fLoc args =
-  
+typecheckApp : VarContext -> String -> Location -> List ( ExprT, Location ) -> Result (List TCErr) ExprT
+typecheckApp ctx f fLoc largs =
+  let args = List.map Tuple.first largs in
+
   if f == "and" || f == "or" then
-    args |> List.map (sortMustBe BoolSort) |> allMustSucceed
+    allMustSucceed (List.map (sortMustBe BoolSort) largs)
     |> Result.map (ExprT f BoolSort)
   
+  else if f == "=>" || f == "implies" then
+    allMustSucceed (List.map (sortMustBe BoolSort) largs)
+    |> andCheck (arityMustBe 2 fLoc args)
+    |> yielding (ExprT f BoolSort args)
+
   else if f == "not" then
-    args |> List.map (sortMustBe BoolSort) |> allMustSucceed
-    |> Result.andThen (arityMustBe 1 fLoc)
-    |> Result.map (ExprT f BoolSort)
+    allMustSucceed (List.map (sortMustBe BoolSort) largs)
+    |> andCheck (arityMustBe 1 fLoc args)
+    |> yielding (ExprT f BoolSort args)
 
   else if f == "+" || f == "*" then
-    args |> List.map (sortMustBe RealSort) |> allMustSucceed
+    allMustSucceed (List.map (sortMustBe RealSort) largs)
     |> Result.map (ExprT f RealSort)
 
   else if f == "-" || f == "/" then
-    args |> List.map (sortMustBe RealSort) |> allMustSucceed
-    |> Result.andThen (arityMustBe 2 fLoc)
-    |> Result.map (ExprT f RealSort)
+    allMustSucceed (List.map (sortMustBe RealSort) largs)
+    |> andCheck (arityMustBe 2 fLoc args)
+    |> yielding (ExprT f RealSort args)
 
   else if f == "<" || f == "<=" || f == ">" || f == ">=" then
-    args |> List.map (sortMustBe RealSort) |> allMustSucceed
-    |> Result.andThen (arityMustBe 2 fLoc)
-    |> Result.map (ExprT f RealSort)
+    allMustSucceed (List.map (sortMustBe RealSort) largs)
+    |> andCheck (arityMustBe 2 fLoc args)
+    |> yielding (ExprT f RealSort args)
 
   else if f == "=" || f == "distinct" then
-    args |> sortsShouldMatch
-    |> Result.map (\_ -> ExprT f BoolSort (List.map Tuple.first args))
+    sortsShouldMatch largs
+    |> Result.map (\_ -> ExprT f BoolSort args)
 
   else if f == "if" || f == "ite" then
-    case args of
+    case largs of
       condition :: thenBranch :: elseBranch :: [] ->
-        [ sortMustBe BoolSort condition |> killResult
-        , sortsShouldMatch [ thenBranch, elseBranch ] |> killResult
-        ] |> allMustSucceed
-        |> Result.map
-          (\_ -> ExprT f (getSort (Tuple.first thenBranch))
-            [ Tuple.first condition
-            , Tuple.first thenBranch
-            , Tuple.first elseBranch
-            ]
-          )
-      _ -> Err [ ArityMismatch fLoc (List.length args) 3 ]
+        sortMustBe BoolSort condition
+        |> andCheck (sortsShouldMatch [ thenBranch, elseBranch ])
+        |> yielding (ExprT f (getSort (Tuple.first thenBranch)) args)
+      _ -> Err [ ArityMismatch fLoc (List.length largs) 3 ]
 
   else
-    Err [ UnrecognizedHeadSymbol fLoc ]
+    case Dict.get f ctx.freeFuns of
+      Just funcType ->
+        allMustSucceed (List.map2 sortMustBe funcType.paramSorts largs)
+        |> andCheck (arityMustBe (List.length funcType.paramSorts) fLoc args)
+        |> yielding (ExprT f funcType.retSort args)
+      Nothing -> Err [ UnrecognizedHeadSymbol fLoc ]
 
 sortMustBe : Sort -> ( ExprT, Location ) -> Result (List TCErr) ExprT
 sortMustBe sort ( e, loc ) =
@@ -92,24 +98,3 @@ sortsShouldMatch exprs =
       Ok (Just (sort, loc)) ->
         if getSort (Tuple.first e) == sort then Ok (Just ( sort, Tuple.second e ))
         else Err [ SortsShouldMatch (getSort (Tuple.first e)) (Tuple.second e) sort loc ]
-
-killResult : Result a b -> Result a ()
-killResult = Result.map (\_ -> ())
-
-allMustSucceed : List (Result (List err) a) -> Result (List err) (List a)
-allMustSucceed results =
-  let ( fails, succs ) = resultsPartition results
-  in  if List.length succs == List.length results then
-        Ok succs
-      else Err fails
-
-resultsPartition : List (Result (List a) b) -> ( List a, List b )
-resultsPartition results =
-  case results of
-    [] -> ([], [])
-    (Err errs :: t) ->
-      let (es, ss) = resultsPartition t
-      in  (errs ++ es, ss)
-    (Ok succ :: t) ->
-      let (es, ss) = resultsPartition t
-      in  (es, succ :: ss)

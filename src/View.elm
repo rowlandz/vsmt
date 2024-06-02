@@ -80,7 +80,11 @@ cEntry : CEntry -> Element Event
 cEntry canvas =
   column [  ]
     [ text "Sorts"
-    , sortEntries canvas.uninterpretedSorts
+    , sortEntries canvas.uninterpSorts
+    , Input.button []
+        { onPress = Just Event.UserAddedSort
+        , label = text "new sort"
+        }
     , text "Variables"
     , varEntries canvas.variables
     , Input.button []
@@ -102,12 +106,18 @@ sortEntries sorts =
 
 sortEntry : Int -> String -> Element Event
 sortEntry idx sortName =
-  Input.text [ Font.family [ Font.monospace ] ]
-    { onChange = Event.UserChangedSortName idx
-    , text = sortName
-    , label = Input.labelHidden ("sort" ++ String.fromInt idx)
-    , placeholder = Just (Input.placeholder [] (text "S"))
-    }
+  row []
+    [ Input.text [ Font.family [ Font.monospace ] ]
+        { onChange = Event.UserChangedSortName idx
+        , text = sortName
+        , label = Input.labelHidden ("sort" ++ String.fromInt idx)
+        , placeholder = Just (Input.placeholder [] (text "S"))
+        }
+    , Input.button []
+        { onPress = Just (Event.UserDeletedSort idx)
+        , label = text "Delete"
+        }
+    ]
 
 varEntries : Array ( String, String ) -> Element Event
 varEntries vars =

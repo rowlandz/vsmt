@@ -9,7 +9,7 @@ type Canvas
   | MkCTopLevelExpr CTopLevelExpr
 
 type alias CEntry =
-  { uninterpretedSorts : Array String
+  { uninterpSorts : Array String
   , variables : Array ( String, String )
   , expr : String
   }
