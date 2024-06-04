@@ -10,3 +10,5 @@ type Event
   | UserDeletedVar Int
   | UserChangedText String
   | UserClickedTactic String
+  | UserClickedUndo
+  | UserSelectedExample String

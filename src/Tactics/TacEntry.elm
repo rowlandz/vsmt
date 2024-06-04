@@ -3,6 +3,7 @@ module Tactics.TacEntry exposing (parseTopLevelExpr)
 import Array
 import Dict
 import Set exposing (Set)
+import Data.Canvas as Canvas exposing (Canvas(..), CEntry, CTopLevelExpr)
 import Data.Parsed exposing (..)
 import Data.Parsed exposing (ParsedExp(..))
 import Data.Typechecked exposing (..)
@@ -10,7 +11,6 @@ import Func.Parsing exposing (parseExp, parseType)
 import Func.Typechecking exposing (typecheckExp)
 import Func.ErrorPrinting exposing (tcerrToString)
 import Common exposing (allMustSucceed, andCheck, andCheckL, andCheckRL, resultBind, yielding)
-import Canvas exposing (Canvas(..), CEntry, CTopLevelExpr)
 import Tactic exposing (Tactic)
 
 parseTopLevelExpr : Tactic

@@ -1,11 +1,13 @@
 module Update exposing (..)
 
 import Array
+import Dict
 import Event exposing (..)
 import Model exposing (..)
-import Canvas exposing (..)
+import Data.Canvas exposing (..)
 import Tactics.All
 import Tactic exposing (Tactic)
+import ExampleEntries
 
 update : Event -> Model -> Model
 update event model =
@@ -71,9 +73,34 @@ update event model =
     UserClickedTactic tacName ->
       case findTacticByName tacName Tactics.All.all of
         Just found -> case found.run model.currentCanvas of
-          Ok newCanvas -> { model | currentCanvas = newCanvas, canvasHistory = model.currentCanvas :: model.canvasHistory }
+          Ok newCanvas ->
+            { currentCanvas = newCanvas
+            , canvasHistory = model.currentCanvas :: model.canvasHistory
+            , messagePanelText = ""
+            }
           Err err -> model |> withMsg err
         Nothing -> model |> withMsg ("Could not find tactic with name " ++ tacName)
+
+    UserClickedUndo ->
+      case model.canvasHistory of
+        [] -> model |> withMsg "Nothing to undo"
+        (c :: cs) ->
+          { currentCanvas = c
+          , canvasHistory = cs
+          , messagePanelText = ""
+          }
+
+    UserSelectedExample example ->
+      case Dict.get example ExampleEntries.examples of
+        Just centry ->
+          { currentCanvas = MkCEntry centry
+          , canvasHistory = []
+          , messagePanelText = ""
+          }
+        Nothing -> model |> withMsg ("Example " ++ example ++ " not found")
+
+
+-- Shared
 
 withMsg : String -> Model -> Model
 withMsg msg model = { model | messagePanelText = msg }

@@ -2,11 +2,13 @@ module Tactics.TacTopLevelExpr exposing
   ( tacPropagateNOTs
   , tacFlattenAssoc
   , tacDistributeOROverAND
+  , tacLiftITE
+  , tacRewriteBoolITE
   )
 
 import Common exposing (greedy, greedy1, orElse, listSplitOnFirst)
 import Data.Typechecked exposing (ExprT(..), Sort(..), getHead, getSort, getSubs)
-import Canvas exposing (Canvas(..))
+import Data.Canvas exposing (Canvas(..))
 import Tactic exposing (Tactic)
 
 
@@ -50,7 +52,29 @@ tacDistributeOROverAND =
       _ -> Err "Wrong canvas type"
   }
 
+tacLiftITE : Tactic
+tacLiftITE =
+  { name = "lift if-else"
+  , fromCanvas = "TopLevelExpr"
+  ,run = \c -> case c of
+    MkCTopLevelExpr tle ->
+      case topDownGreedy1Rewrite liftITE tle.expr of  -- TODO: should be bottom-up instead
+        Just newExpr -> Ok (MkCTopLevelExpr { tle | expr = newExpr })
+        Nothing -> Err "Tactic failed to rewrite anything"
+    _ -> Err "Wrong canvas type"
+  }
 
+tacRewriteBoolITE : Tactic
+tacRewriteBoolITE =
+  { name = "rewrite bool if-else"
+  , fromCanvas = "TopLevelExpr"
+  ,run = \c -> case c of
+    MkCTopLevelExpr tle ->
+      case topDownGreedy1Rewrite rewriteBoolITE tle.expr of
+        Just newExpr -> Ok (MkCTopLevelExpr { tle | expr = newExpr })
+        Nothing -> Err "Tactic failed to rewrite anything"
+    _ -> Err "Wrong canvas type"
+  }
 
 -- Helper functions for the tactics
 
@@ -144,4 +168,30 @@ distributeXOverY x y (ExprT hd st subExprs) =
         |> List.map (\ySub -> ExprT x st (subs1 ++ ySub :: subs2))
         |> ExprT y st
       )
+  else Nothing
+
+{-| Lifts an `if`/`ite` expression over any other expression.
+-}
+liftITE : ExprT -> Maybe ExprT
+liftITE (ExprT hd st subExprs) =
+  listSplitOnFirst (\e -> getHead e == "if" || getHead e == "ite") subExprs |> Maybe.andThen
+    (\( subs1, iteExpr, subs2 ) ->
+      case getSubs iteExpr of
+        [ cond, thenExp, elseExp ] ->
+          let newThenExp = ExprT hd st (subs1 ++ thenExp :: subs2)
+              newElseExp = ExprT hd st (subs1 ++ elseExp :: subs2) in
+          Just (ExprT (getHead iteExpr) st [ cond, newThenExp, newElseExp ])
+        _ -> Nothing
+    )
+
+rewriteBoolITE : ExprT -> Maybe ExprT
+rewriteBoolITE (ExprT hd st subExprs) =
+  if (hd == "ite" || hd == "if") && st == BoolSort then
+    case subExprs of
+      [ cond, thenExp, elseExp ] -> Just <|
+        ExprT "and" BoolSort
+          [ ExprT "or" BoolSort [ ExprT "not" BoolSort [ cond ], thenExp ]
+          , ExprT "or" BoolSort [ cond, elseExp ]
+          ]
+      _ -> Nothing
   else Nothing

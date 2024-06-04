@@ -1,4 +1,4 @@
-module Canvas exposing (..)
+module Data.Canvas exposing (..)
 
 import Array exposing (Array)
 import Dict exposing (Dict)
@@ -23,3 +23,9 @@ type alias VarContext =
   { freeVars : Dict String Sort
   , freeFuns : Dict String FuncType
   }
+
+getCanvasType : Canvas -> String
+getCanvasType canvas =
+  case canvas of
+    MkCEntry _        -> "Entry"
+    MkCTopLevelExpr _ -> "TopLevelExpr"

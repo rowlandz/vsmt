@@ -3,7 +3,7 @@ module Model exposing
   )
 
 import Array
-import Canvas exposing (Canvas)
+import Data.Canvas exposing (Canvas)
 
 type alias Model =
   { currentCanvas : Canvas
@@ -14,7 +14,7 @@ type alias Model =
 initialModel : Model
 initialModel =
   { currentCanvas =
-      Canvas.MkCEntry
+      Data.Canvas.MkCEntry
         { uninterpSorts = Array.fromList [ ]
         , variables = Array.fromList [ ("x", "Bool"), ("y", "Bool"), ("z", "Bool") ]
         , expr = "(not (and x (or y (not z))))"

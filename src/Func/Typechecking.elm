@@ -15,7 +15,9 @@ typecheckExp ctx pe =
     SSymb loc x ->
       case Dict.get x ctx.freeVars of
         Just xSort -> Ok (ExprT x xSort [])
-        Nothing -> Err [ UndeclaredSymbol loc ]
+        Nothing -> case String.toInt x of
+          Just _ -> Ok (ExprT x RealSort [])
+          Nothing -> Err [ UnknownExpressionForm loc ]
 
     SList _ (SSymb fLoc f :: args) ->
       let argLocs = List.map getLoc args in
@@ -43,6 +45,11 @@ typecheckApp ctx f fLoc largs =
     |> andCheck (arityMustBe 1 fLoc args)
     |> yielding (ExprT f BoolSort args)
 
+  else if f == "neg" then
+    allMustSucceed (List.map (sortMustBe RealSort) largs)
+    |> andCheck (arityMustBe 1 fLoc args)
+    |> yielding (ExprT f RealSort args)
+
   else if f == "+" || f == "*" then
     allMustSucceed (List.map (sortMustBe RealSort) largs)
     |> Result.map (ExprT f RealSort)
@@ -55,7 +62,7 @@ typecheckApp ctx f fLoc largs =
   else if f == "<" || f == "<=" || f == ">" || f == ">=" then
     allMustSucceed (List.map (sortMustBe RealSort) largs)
     |> andCheck (arityMustBe 2 fLoc args)
-    |> yielding (ExprT f RealSort args)
+    |> yielding (ExprT f BoolSort args)
 
   else if f == "=" || f == "distinct" then
     sortsShouldMatch largs

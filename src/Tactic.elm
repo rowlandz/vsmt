@@ -1,6 +1,6 @@
 module Tactic exposing (..)
 
-import Canvas exposing (Canvas)
+import Data.Canvas exposing (Canvas)
 
 type alias Tactic =
   { name: String
