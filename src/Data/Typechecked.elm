@@ -20,6 +20,12 @@ getSort (ExprT _ sort _) = sort
 getSubs : ExprT -> List ExprT
 getSubs (ExprT _ _ subs) = subs
 
+exprTEq : ExprT -> ExprT -> Bool
+exprTEq (ExprT hd1 st1 subs1) (ExprT hd2 st2 subs2) =
+  if hd1 == hd2 && st1 == st2 then
+    List.all identity (List.map2 exprTEq subs1 subs2)
+  else False
+
 exprTToString : ExprT -> String
 exprTToString (ExprT head _  children) =
   case children of

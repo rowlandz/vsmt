@@ -2,12 +2,12 @@ module View exposing (view)
 
 import Array exposing (Array)
 import Html exposing (Html)
-import Element exposing (Element, el, text, row, column, fill, width, height, rgb255, padding, paddingXY, mouseOver)
+import Element exposing (Element, el, text, row, column, fill, fillPortion, width, height, rgb255, padding, paddingXY, mouseOver)
 import Element.Background as Bg
 import Element.Font as Font
 import Element.Input as Input
 import Element.Border as Border
-import Data.Canvas as Canvas exposing (Canvas, CEntry, CTopLevelExpr, getCanvasType)
+import Data.Canvas as Canvas exposing (..)
 import Data.Typechecked exposing (exprTToString)
 import Model exposing (Model)
 import Event exposing (Event)
@@ -18,6 +18,7 @@ import Html.Attributes
 import Html.Events
 import ExampleEntries
 import Dict
+import Html.Attributes exposing (wrap)
 
 view : Model -> Html Event
 view model = Element.layout [] (mainElement model)
@@ -32,7 +33,7 @@ mainElement model =
     [ headerStrip
     , row [ width fill, height fill ]
         [ canavsHistory model
-        , column [ width fill, height fill ]
+        , column [ width (fillPortion 1), height fill ]
             [ tacticSelection (getCanvasType model.currentCanvas)
             , messageBox model
             ]
@@ -49,12 +50,6 @@ headerStrip =
     ]
     [ text "Select an example: "
     , exampleSelector
-    -- , Input.Idle []
-    --     { label = Input.labelLeft [] (text "Blah")
-    --     , options = [ Input.option "first" (text "first"), Input.option "sec" (text "sec") ]
-    --     , onChange = \s -> UserClickedUndo
-    --     , selected = Nothing
-    --     }
     , Input.button attrsButton { label = text "undo", onPress = Just UserClickedUndo }
     ]
 
@@ -111,7 +106,7 @@ messageBox model =
 canavsHistory : Model -> Element Event
 canavsHistory model =
   column
-    [ width fill, height fill
+    [ width (fillPortion 1), height fill
     , padding 10
     , Border.widthEach { bottom=0, left=0, right=1, top=0 }
     , Border.color grey3
@@ -129,8 +124,14 @@ viewCanvas canvas =
       (case canvas of
         Canvas.MkCEntry c -> cEntry c
         Canvas.MkCTopLevelExpr c -> cTopLevelExpr c
+        Canvas.MkCDPLL c -> cDPLL c
       )
     )
+
+
+
+-- CEntry
+
 
 cEntry : CEntry -> Element Event
 cEntry canvas =
@@ -201,7 +202,7 @@ varEntry idx (varName, varType) =
         { onChange = Event.UserChangedVarType idx
         , text = varType
         , label = Input.labelHidden ("varType" ++ String.fromInt idx)
-        , placeholder = Just (Input.placeholder [] (text "bool"))
+        , placeholder = Just (Input.placeholder [] (text "Bool"))
         }
     , Input.button attrsButton
         { onPress = Just (Event.UserDeletedVar idx)
@@ -211,10 +212,48 @@ varEntry idx (varName, varType) =
 
 
 
+-- CTopLevelExpr
+
+
 cTopLevelExpr : CTopLevelExpr -> Element Event
 cTopLevelExpr canvas =
   el [ Font.family [ Font.monospace ] ]
     (text (exprTToString canvas.expr))
+
+
+
+-- CDPLL
+
+
+cDPLL : CDPLL -> Element Event
+cDPLL c =
+  column [ width fill, height fill ]
+    [ el [ Border.widthEach { bottom=1, left=0, right=0, top=0 } ]
+      (text "DPLL")
+    , case c.branches of
+        [] -> text "No branches!"
+        [ branch ] -> cDPLLBranch branch
+        branch :: rest ->
+          column []
+            [ cDPLLBranch branch
+            , text (String.fromInt (List.length rest) ++ " more branch(es)")
+            ]
+    ]
+
+cDPLLBranch : DPLLBranch -> Element Event
+cDPLLBranch branch =
+  column [ padding 5, Font.family [ Font.monospace ] ]
+    (List.map cDPLLClause branch)
+
+cDPLLClause : DPLLClause -> Element Event
+cDPLLClause clause =
+  el [ padding 5 ]
+    (text (String.concat (List.intersperse " ∨ " (List.map cDPLLAtom clause))))
+
+
+cDPLLAtom : DPLLAtom -> String
+cDPLLAtom { get, negated } =
+  (if negated then "¬" else "") ++ exprTToString get
 
 
 
@@ -238,9 +277,12 @@ attrsButton =
   , Border.width 1, Border.color grey4, Border.rounded 5
   ]
 
-grey1 = rgb255 0x11 0x11 0x11
+-- grey1 = rgb255 0x11 0x11 0x11
+grey2 : Element.Color
 grey2 = rgb255 0x28 0x28 0x28
+grey3 : Element.Color
 grey3 = rgb255 0x44 0x44 0x44
+grey4 : Element.Color
 grey4 = rgb255 0xaa 0xaa 0xaa
-
+white : Element.Color
 white = rgb255 0xff 0xff 0xff

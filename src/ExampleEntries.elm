@@ -32,4 +32,12 @@ examples =
         , expr = "(>= (if (< x 0) (neg x) x) 0)"
         }
       )
+    , ( "demorgan's rule"
+      , { uninterpSorts = Array.empty
+        , variables = Array.fromList [ ( "p", "Bool" ), ( "q", "Bool" ) ]
+        , expr = "(not\n"
+              ++ "  (= (not (and p q)) (or (not p) (not q)))\n"
+              ++ ")"
+        }
+      )
     ]

@@ -7,6 +7,7 @@ import Data.Typechecked exposing (Sort, FuncType, ExprT)
 type Canvas
   = MkCEntry CEntry
   | MkCTopLevelExpr CTopLevelExpr
+  | MkCDPLL CDPLL
 
 type alias CEntry =
   { uninterpSorts : Array String
@@ -19,6 +20,30 @@ type alias CTopLevelExpr =
   , expr : ExprT
   }
 
+
+
+-- DPLL
+
+
+type alias CDPLL =
+  { varContext : VarContext
+  , branches : List DPLLBranch
+  }
+
+type alias DPLLBranch = List DPLLClause
+
+type alias DPLLClause = List DPLLAtom
+
+type alias DPLLAtom =
+  { get : ExprT
+  , negated : Bool
+  }
+
+
+
+-- Shared
+
+
 type alias VarContext =
   { freeVars : Dict String Sort
   , freeFuns : Dict String FuncType
@@ -29,3 +54,4 @@ getCanvasType canvas =
   case canvas of
     MkCEntry _        -> "Entry"
     MkCTopLevelExpr _ -> "TopLevelExpr"
+    MkCDPLL _         -> "DPLL"

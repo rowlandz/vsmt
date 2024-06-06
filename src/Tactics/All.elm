@@ -10,6 +10,9 @@ all =
   , TacTopLevelExpr.tacPropagateNOTs
   , TacTopLevelExpr.tacFlattenAssoc
   , TacTopLevelExpr.tacDistributeOROverAND
+  , TacTopLevelExpr.tacRewriteImplies
   , TacTopLevelExpr.tacLiftITE
   , TacTopLevelExpr.tacRewriteBoolITE
+  , TacTopLevelExpr.tacEqToBiImpl
+  , TacTopLevelExpr.tacStartDPLL
   ]

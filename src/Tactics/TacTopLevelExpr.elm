@@ -2,14 +2,18 @@ module Tactics.TacTopLevelExpr exposing
   ( tacPropagateNOTs
   , tacFlattenAssoc
   , tacDistributeOROverAND
+  , tacRewriteImplies
   , tacLiftITE
   , tacRewriteBoolITE
+  , tacEqToBiImpl
+  , tacStartDPLL
   )
 
-import Common exposing (greedy, greedy1, orElse, listSplitOnFirst)
+import Common exposing (allMustSucceed, greedy, greedy1, orElse, listSplitOnFirst)
 import Data.Typechecked exposing (ExprT(..), Sort(..), getHead, getSort, getSubs)
-import Data.Canvas exposing (Canvas(..))
+import Data.Canvas exposing (Canvas(..), DPLLBranch, DPLLAtom, DPLLClause)
 import Tactic exposing (Tactic)
+import Common exposing (yielding)
 
 
 
@@ -52,6 +56,18 @@ tacDistributeOROverAND =
       _ -> Err "Wrong canvas type"
   }
 
+tacRewriteImplies : Tactic
+tacRewriteImplies =
+  { name = "rewrite implies"
+  , fromCanvas = "TopLevelExpr"
+  , run = \c -> case c of
+    MkCTopLevelExpr tle ->
+      case topDownGreedy1Rewrite rewriteImplies tle.expr of
+        Just newExpr -> Ok (MkCTopLevelExpr { tle | expr = newExpr })
+        Nothing -> Err "Tactic failed to rewrite anything"
+    _ -> Err "Wrong canvas type"
+  }
+
 tacLiftITE : Tactic
 tacLiftITE =
   { name = "lift if-else"
@@ -68,13 +84,42 @@ tacRewriteBoolITE : Tactic
 tacRewriteBoolITE =
   { name = "rewrite bool if-else"
   , fromCanvas = "TopLevelExpr"
-  ,run = \c -> case c of
+  , run = \c -> case c of
     MkCTopLevelExpr tle ->
       case topDownGreedy1Rewrite rewriteBoolITE tle.expr of
         Just newExpr -> Ok (MkCTopLevelExpr { tle | expr = newExpr })
         Nothing -> Err "Tactic failed to rewrite anything"
     _ -> Err "Wrong canvas type"
   }
+
+tacEqToBiImpl : Tactic
+tacEqToBiImpl =
+  { name = "equal to bi-implication"
+  , fromCanvas = "TopLevelExpr"
+  , run = \c -> case c of
+    MkCTopLevelExpr tle ->
+      case topDownGreedy1Rewrite eqToBiImpl tle.expr of
+        Just newExpr -> Ok (MkCTopLevelExpr { tle | expr = newExpr })
+        Nothing -> Err "Tactic failed to rewrite anything"
+    _ -> Err "Wrong canvas type"
+  }
+
+tacStartDPLL : Tactic
+tacStartDPLL =
+  { name = "start DPLL"
+  , fromCanvas = "TopLevelExpr"
+  , run = \c -> case c of
+    MkCTopLevelExpr tle ->
+      case validateCNF tle.expr of
+        Ok branch -> Ok (MkCDPLL { varContext = tle.varContext, branches = [ branch ] })
+        Err err ->
+          ( "Expression not in conjunctive normal form:\n\n"
+          ++ String.concat (List.intersperse "\n\n" err)
+          ) |> Err
+    _ -> Err "Wrong canvas type"
+  }
+
+
 
 -- Helper functions for the tactics
 
@@ -170,8 +215,16 @@ distributeXOverY x y (ExprT hd st subExprs) =
       )
   else Nothing
 
-{-| Lifts an `if`/`ite` expression over any other expression.
--}
+rewriteImplies : ExprT -> Maybe ExprT
+rewriteImplies (ExprT hd _ subExprs) =
+  if hd == "=>" || hd == "implies" then
+    case subExprs of
+      [ lhs, rhs ] ->
+        Just (ExprT "or" BoolSort [ ExprT "not" BoolSort [ lhs ], rhs ])
+      _ -> Nothing
+  else Nothing
+
+{-| Lifts an `if`/`ite` expression over any other expression. -}
 liftITE : ExprT -> Maybe ExprT
 liftITE (ExprT hd st subExprs) =
   listSplitOnFirst (\e -> getHead e == "if" || getHead e == "ite") subExprs |> Maybe.andThen
@@ -195,3 +248,56 @@ rewriteBoolITE (ExprT hd st subExprs) =
           ]
       _ -> Nothing
   else Nothing
+
+eqToBiImpl : ExprT -> Maybe ExprT
+eqToBiImpl expr =
+  case expr of
+    ExprT "=" _ [ p, q ] ->
+      if getSort p == BoolSort && getSort q == BoolSort then
+        ExprT "and" BoolSort
+          [ ExprT "or" BoolSort [ ExprT "not" BoolSort [ p ], q ]
+          , ExprT "or" BoolSort [ ExprT "not" BoolSort [ q ], p ]
+          ] |> Just
+      else Nothing
+    _ -> Nothing
+
+
+
+-- Validation of CNF
+
+
+validateCNF : ExprT -> Result (List String) DPLLBranch
+validateCNF expr =
+  case expr of
+    ExprT "and" _ es ->
+      allMustSucceed (List.map validateClause es)
+    _ ->
+      validateClause expr
+      |> Result.map List.singleton
+
+validateClause : ExprT -> Result (List String) DPLLClause
+validateClause expr =
+  case expr of
+    ExprT "or" _ subExprs ->
+      allMustSucceed (List.map validateAtom subExprs)
+    _ ->
+      validateAtom expr
+      |> Result.map List.singleton
+
+validateAtom : ExprT -> Result (List String) DPLLAtom
+validateAtom expr =
+  case expr of
+    ExprT "not" _ [ subExpr ] ->
+      validateProp subExpr
+      |> yielding { get = subExpr, negated = True }
+    _ ->
+      validateProp expr
+      |> yielding { get = expr, negated = False }
+
+validateProp : ExprT -> Result (List String) ()
+validateProp expr =
+  if List.member (getHead expr) [ "and", "or", "not", "implies", "=>" ]
+  || ((getHead expr == "if" || getHead expr == "ite") && getSort expr == BoolSort) then
+    Err [ "Expected an expression not in bool theory" ]
+  else
+    Ok ()
