@@ -28,6 +28,7 @@ type alias CTopLevelExpr =
 type alias CDPLL =
   { varContext : VarContext
   , branches : List DPLLBranch
+  , boundVars : List ( String, ExprT )
   }
 
 type alias DPLLBranch = List DPLLClause
@@ -35,7 +36,7 @@ type alias DPLLBranch = List DPLLClause
 type alias DPLLClause = List DPLLAtom
 
 type alias DPLLAtom =
-  { get : ExprT
+  { get : String
   , negated : Bool
   }
 

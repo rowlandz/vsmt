@@ -1,5 +1,7 @@
 module Event exposing (..)
 
+import Model exposing (TacticSelector)
+
 type Event
   = UserAddedSort
   | UserChangedSortName Int String
@@ -9,6 +11,8 @@ type Event
   | UserChangedVarType Int String
   | UserDeletedVar Int
   | UserChangedText String
-  | UserClickedTactic String
+  | UserChangedTacticArg Int Int String
+  | UserClickedTactic TacticSelector
   | UserClickedUndo
   | UserSelectedExample String
+  | DoNothing

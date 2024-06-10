@@ -114,3 +114,39 @@ listSplitOnFirst predicate l =
       else
         listSplitOnFirst predicate xs
         |> Maybe.map (\( l1, y, l2 ) -> ( x::l1, y, l2 ))
+
+listFindFirstWhere : (a -> Maybe b) -> List a -> Maybe ( List a, b, List a )
+listFindFirstWhere f l =
+  case l of
+    [] -> Nothing
+    x :: xs -> case f x of
+      Just y -> Just ( [], y, xs )
+      Nothing -> listFindFirstWhere f xs
+        |> Maybe.map (\( l1, y, l2 ) -> ( x :: l1, y, l2 ))
+
+listIndexedMap2 : (Int -> a -> b -> c) -> List a -> List b -> List c
+listIndexedMap2 f l1 l2 =
+  List.indexedMap (\i ( a, b ) -> f i a b) (List.map2 Tuple.pair l1 l2)
+
+listTraverseST : (st -> a -> ( st, b )) -> st -> List a -> ( st, List b )
+listTraverseST f st la =
+  case la of
+    [] -> ( st, [] )
+    x::xs ->
+      let ( st1, y ) = f st x
+          ( st2, ys ) = listTraverseST f st1 xs in
+          ( st2, y :: ys )
+
+listRemoveDuplicates : List a -> List a
+listRemoveDuplicates l =
+  case l of
+    [] -> []
+    x :: xs ->
+      let simpl = listRemoveDuplicates xs in
+      if List.member x simpl then simpl else x :: simpl
+
+listOneMustSucceed : (a -> Maybe a) -> List a -> Maybe (List a)
+listOneMustSucceed f l =
+  let mapped = List.map f l in
+  if List.all (\m -> m == Nothing) mapped then Nothing
+  else Just (List.map2 Maybe.withDefault l mapped)

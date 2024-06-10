@@ -3,7 +3,8 @@ module Tactic exposing (..)
 import Data.Canvas exposing (Canvas)
 
 type alias Tactic =
-  { name: String
+  { name : String
   , fromCanvas : String
-  , run : Canvas -> Result String Canvas
+  , params : List String
+  , run : List String -> Canvas -> Result String Canvas
   }

@@ -17,7 +17,8 @@ parseTopLevelExpr : Tactic
 parseTopLevelExpr =
   { name = "parse top level expression"
   , fromCanvas = "Entry"
-  , run = \c -> case c of
+  , params = []
+  , run = \_ c -> case c of
       Canvas.MkCEntry entry ->
         validate entry
           |> Result.map MkCTopLevelExpr

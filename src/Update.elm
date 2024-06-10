@@ -5,8 +5,6 @@ import Dict
 import Event exposing (..)
 import Model exposing (..)
 import Data.Canvas exposing (..)
-import Tactics.All
-import Tactic exposing (Tactic)
 import ExampleEntries
 
 update : Event -> Model -> Model
@@ -70,16 +68,23 @@ update event model =
           { model | currentCanvas = MkCEntry { entry | variables = arrayDeleteNth idx entry.variables } }
         _ -> model
 
-    UserClickedTactic tacName ->
-      case findTacticByName tacName Tactics.All.all of
-        Just found -> case found.run model.currentCanvas of
-          Ok newCanvas ->
-            { currentCanvas = newCanvas
-            , canvasHistory = model.currentCanvas :: model.canvasHistory
-            , messagePanelText = ""
-            }
-          Err err -> model |> withMsg err
-        Nothing -> model |> withMsg ("Could not find tactic with name " ++ tacName)
+    UserChangedTacticArg tacIdx argIdx value ->
+      case Array.get tacIdx model.tacticSelectors of
+        Just tacSelector ->
+          let newArgs = Array.set argIdx value tacSelector.args
+              newTacSel = Array.set tacIdx { tacSelector | args = newArgs } model.tacticSelectors in
+              { model | tacticSelectors = newTacSel }
+        Nothing -> model |> withMsg "Param not found"
+
+    UserClickedTactic tacticSelector ->
+      case tacticSelector.tactic.run (Array.toList tacticSelector.args) model.currentCanvas of
+        Ok newCanvas ->
+          { currentCanvas = newCanvas
+          , canvasHistory = model.currentCanvas :: model.canvasHistory
+          , tacticSelectors = makeTacticSelectorsFor (getCanvasType newCanvas)
+          , messagePanelText = ""
+          }
+        Err err -> model |> withMsg err
 
     UserClickedUndo ->
       case model.canvasHistory of
@@ -87,6 +92,7 @@ update event model =
         (c :: cs) ->
           { currentCanvas = c
           , canvasHistory = cs
+          , tacticSelectors = makeTacticSelectorsFor (getCanvasType c)
           , messagePanelText = ""
           }
 
@@ -95,9 +101,13 @@ update event model =
         Just centry ->
           { currentCanvas = MkCEntry centry
           , canvasHistory = []
+          , tacticSelectors = makeTacticSelectorsFor "Entry"
           , messagePanelText = ""
           }
         Nothing -> model |> withMsg ("Example " ++ example ++ " not found")
+
+    DoNothing -> model
+
 
 
 -- Shared
@@ -105,11 +115,12 @@ update event model =
 withMsg : String -> Model -> Model
 withMsg msg model = { model | messagePanelText = msg }
 
-findTacticByName : String -> List Tactic -> Maybe Tactic
-findTacticByName name tactics =
-  case tactics of
+-- TODO: Array vs. List what is what?
+findTacticSelector : String -> List TacticSelector -> Maybe TacticSelector
+findTacticSelector name selectors =
+  case selectors of
     [] -> Nothing
-    t :: ts -> if t.name == name then Just t else findTacticByName name ts
+    t :: ts -> if t.tactic.name == name then Just t else findTacticSelector name ts
 
 arrayDeleteNth : Int -> Array.Array a -> Array.Array a
 arrayDeleteNth i arr =

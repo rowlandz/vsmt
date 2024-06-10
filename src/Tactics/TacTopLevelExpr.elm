@@ -14,6 +14,8 @@ import Data.Typechecked exposing (ExprT(..), Sort(..), getHead, getSort, getSubs
 import Data.Canvas exposing (Canvas(..), DPLLBranch, DPLLAtom, DPLLClause)
 import Tactic exposing (Tactic)
 import Common exposing (yielding)
+import Data.Typechecked exposing (exprTEq)
+import Common exposing (listTraverseST)
 
 
 
@@ -24,7 +26,8 @@ tacPropagateNOTs : Tactic
 tacPropagateNOTs =
   { name = "propagate not"
   , fromCanvas = "TopLevelExpr"
-  , run = \c -> case c of
+  , params = []
+  , run = \_ c -> case c of
       MkCTopLevelExpr tle ->
         case topDownGreedy1Rewrite propagateNot tle.expr of
           Just newExpr -> Ok (MkCTopLevelExpr { tle | expr = newExpr })
@@ -36,7 +39,8 @@ tacFlattenAssoc : Tactic
 tacFlattenAssoc =
   { name = "flatten ands and ors"
   , fromCanvas = "TopLevelExpr"
-  , run = \c -> case c of
+  , params = []
+  , run = \_ c -> case c of
       MkCTopLevelExpr tle ->
         case topDownGreedy1Rewrite flattenAssoc tle.expr of
           Just newExpr -> Ok (MkCTopLevelExpr { tle | expr = newExpr })
@@ -48,7 +52,8 @@ tacDistributeOROverAND : Tactic
 tacDistributeOROverAND =
   { name = "distribute or over and"
   , fromCanvas = "TopLevelExpr"
-  , run = \c -> case c of
+  , params = []
+  , run = \_ c -> case c of
       MkCTopLevelExpr tle ->
         case topDownGreedy1Rewrite (distributeXOverY "or" "and") tle.expr of
           Just newExpr -> Ok (MkCTopLevelExpr { tle | expr = newExpr })
@@ -60,7 +65,8 @@ tacRewriteImplies : Tactic
 tacRewriteImplies =
   { name = "rewrite implies"
   , fromCanvas = "TopLevelExpr"
-  , run = \c -> case c of
+  , params = []
+  , run = \_ c -> case c of
     MkCTopLevelExpr tle ->
       case topDownGreedy1Rewrite rewriteImplies tle.expr of
         Just newExpr -> Ok (MkCTopLevelExpr { tle | expr = newExpr })
@@ -72,7 +78,8 @@ tacLiftITE : Tactic
 tacLiftITE =
   { name = "lift if-else"
   , fromCanvas = "TopLevelExpr"
-  ,run = \c -> case c of
+  , params = []
+  , run = \_ c -> case c of
     MkCTopLevelExpr tle ->
       case topDownGreedy1Rewrite liftITE tle.expr of  -- TODO: should be bottom-up instead
         Just newExpr -> Ok (MkCTopLevelExpr { tle | expr = newExpr })
@@ -84,7 +91,8 @@ tacRewriteBoolITE : Tactic
 tacRewriteBoolITE =
   { name = "rewrite bool if-else"
   , fromCanvas = "TopLevelExpr"
-  , run = \c -> case c of
+  , params = []
+  , run = \_ c -> case c of
     MkCTopLevelExpr tle ->
       case topDownGreedy1Rewrite rewriteBoolITE tle.expr of
         Just newExpr -> Ok (MkCTopLevelExpr { tle | expr = newExpr })
@@ -96,7 +104,8 @@ tacEqToBiImpl : Tactic
 tacEqToBiImpl =
   { name = "equal to bi-implication"
   , fromCanvas = "TopLevelExpr"
-  , run = \c -> case c of
+  , params = []
+  , run = \_ c -> case c of
     MkCTopLevelExpr tle ->
       case topDownGreedy1Rewrite eqToBiImpl tle.expr of
         Just newExpr -> Ok (MkCTopLevelExpr { tle | expr = newExpr })
@@ -108,10 +117,17 @@ tacStartDPLL : Tactic
 tacStartDPLL =
   { name = "start DPLL"
   , fromCanvas = "TopLevelExpr"
-  , run = \c -> case c of
+  , params = []
+  , run = \_ c -> case c of
     MkCTopLevelExpr tle ->
       case validateCNF tle.expr of
-        Ok branch -> Ok (MkCDPLL { varContext = tle.varContext, branches = [ branch ] })
+        Ok branch ->
+          let st0 = { binds = [], firstUnused = 0 }
+              ( st1, dpllBranch ) = extractBranch st0 branch in
+              { varContext = tle.varContext
+              , branches = [ dpllBranch ]
+              , boundVars = st1.binds
+              } |> MkCDPLL |> Ok
         Err err ->
           ( "Expression not in conjunctive normal form:\n\n"
           ++ String.concat (List.intersperse "\n\n" err)
@@ -265,8 +281,12 @@ eqToBiImpl expr =
 
 -- Validation of CNF
 
+type alias Atom =
+  { get : ExprT
+  , negated : Bool
+  }
 
-validateCNF : ExprT -> Result (List String) DPLLBranch
+validateCNF : ExprT -> Result (List String) (List (List Atom))
 validateCNF expr =
   case expr of
     ExprT "and" _ es ->
@@ -275,7 +295,7 @@ validateCNF expr =
       validateClause expr
       |> Result.map List.singleton
 
-validateClause : ExprT -> Result (List String) DPLLClause
+validateClause : ExprT -> Result (List String) (List Atom)
 validateClause expr =
   case expr of
     ExprT "or" _ subExprs ->
@@ -284,7 +304,7 @@ validateClause expr =
       validateAtom expr
       |> Result.map List.singleton
 
-validateAtom : ExprT -> Result (List String) DPLLAtom
+validateAtom : ExprT -> Result (List String) Atom
 validateAtom expr =
   case expr of
     ExprT "not" _ [ subExpr ] ->
@@ -301,3 +321,25 @@ validateProp expr =
     Err [ "Expected an expression not in bool theory" ]
   else
     Ok ()
+
+type alias ExtractST =
+  { binds : List ( String, ExprT )
+  , firstUnused : Int
+  }
+
+extractBranch : ExtractST -> List (List Atom) -> ( ExtractST, DPLLBranch )
+extractBranch = listTraverseST extractClause
+
+extractClause : ExtractST -> List Atom -> ( ExtractST, DPLLClause )
+extractClause = listTraverseST extractAtom
+
+extractAtom : ExtractST -> Atom -> ( ExtractST, DPLLAtom )
+extractAtom st a =
+  case listSplitOnFirst (Tuple.second >> exprTEq a.get) st.binds of
+    Nothing ->
+      let var = "$" ++ (String.fromInt st.firstUnused)
+      in  Tuple.pair
+            { binds = ( var, a.get ) :: st.binds, firstUnused = st.firstUnused + 1 }
+            { get = var, negated = a.negated }
+    Just ( b1, b, b2 ) ->
+      ( { st | binds = b :: b1 ++ b2 }, { get = Tuple.first b, negated = a.negated } )

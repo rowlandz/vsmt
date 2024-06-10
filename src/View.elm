@@ -2,23 +2,22 @@ module View exposing (view)
 
 import Array exposing (Array)
 import Html exposing (Html)
-import Element exposing (Element, el, text, row, column, fill, fillPortion, width, height, rgb255, padding, paddingXY, mouseOver)
+import Element exposing (Element, el, text, row, column, fill, fillPortion, width, height, rgb255, padding, paddingXY, px, mouseOver)
 import Element.Background as Bg
 import Element.Font as Font
 import Element.Input as Input
 import Element.Border as Border
 import Data.Canvas as Canvas exposing (..)
 import Data.Typechecked exposing (exprTToString)
-import Model exposing (Model)
-import Event exposing (Event)
-import Tactics.All
-import Tactic exposing (Tactic)
+import Model exposing (Model, TacticSelector)
 import Event exposing (Event(..))
 import Html.Attributes
 import Html.Events
 import ExampleEntries
 import Dict
-import Html.Attributes exposing (wrap)
+import Common exposing (listIndexedMap2)
+import Data.Typechecked exposing (ExprT)
+import Element exposing (paragraph)
 
 view : Model -> Html Event
 view model = Element.layout [] (mainElement model)
@@ -34,7 +33,7 @@ mainElement model =
     , row [ width fill, height fill ]
         [ canavsHistory model
         , column [ width (fillPortion 1), height fill ]
-            [ tacticSelection (getCanvasType model.currentCanvas)
+            [ tacticPanel model.tacticSelectors
             , messageBox model
             ]
         ]
@@ -72,27 +71,47 @@ exampleSelector =
       )
     )
 
-tacticSelection : String -> Element Event
-tacticSelection currentCanvasID =
+
+
+-- Tactic Panel
+
+
+tacticPanel : Array TacticSelector -> Element Event
+tacticPanel tacSelectors =
   column
     [ width fill, height fill
     , padding 5
     , Border.widthEach { bottom=1, left=0, right=0, top=0 }
     , Border.color grey3
     ]
-    (Tactics.All.all
-    |> List.filter (\tac -> tac.fromCanvas == currentCanvasID)
-    |> List.map tacticButton
+    (List.indexedMap tacticSelector (Array.toList tacSelectors))
+
+tacticSelector : Int -> TacticSelector -> Element Event
+tacticSelector tacIdx tacSelector =
+  row [ width fill ]
+    (Input.button attrsButton
+      { onPress = Just (UserClickedTactic tacSelector)
+      , label = text "██"
+      }
+    :: el [ paddingXY 5 0 ] (text tacSelector.tactic.name)
+    :: listIndexedMap2 (tacticSelectorParam tacIdx) tacSelector.tactic.params (Array.toList tacSelector.args)
     )
 
-tacticButton : Tactic -> Element Event
-tacticButton tac =
-  el [ padding 2 ]
-    (Input.button attrsButton
-      { onPress = Just (UserClickedTactic tac.name)
-      , label = text tac.name
+tacticSelectorParam : Int -> Int -> String -> String -> Element Event
+tacticSelectorParam tacIdx paramIdx name value  =
+  el [ paddingXY 10 0 ]
+    (Input.text (attrsCodeInput ++ [ width (px 80) ])
+      { text = value
+      , onChange = Event.UserChangedTacticArg tacIdx paramIdx
+      , label = Input.labelLeft [] (text (name ++ " = "))
+      , placeholder = Just (Input.placeholder [] (text "x"))
       }
     )
+
+
+
+-- Message Panel
+
 
 messageBox : Model -> Element Event
 messageBox model =
@@ -102,6 +121,11 @@ messageBox model =
     , Font.family [ Font.monospace ]
     ]
     (text model.messagePanelText)
+
+
+
+---
+
 
 canavsHistory : Model -> Element Event
 canavsHistory model =
@@ -218,7 +242,7 @@ varEntry idx (varName, varType) =
 cTopLevelExpr : CTopLevelExpr -> Element Event
 cTopLevelExpr canvas =
   el [ Font.family [ Font.monospace ] ]
-    (text (exprTToString canvas.expr))
+    (paragraph [] [ text (exprTToString canvas.expr) ])
 
 
 
@@ -238,6 +262,7 @@ cDPLL c =
             [ cDPLLBranch branch
             , text (String.fromInt (List.length rest) ++ " more branch(es)")
             ]
+    , cDPLLBoundVars c.boundVars
     ]
 
 cDPLLBranch : DPLLBranch -> Element Event
@@ -248,14 +273,19 @@ cDPLLBranch branch =
 cDPLLClause : DPLLClause -> Element Event
 cDPLLClause clause =
   el [ padding 5 ]
-    (text (String.concat (List.intersperse " ∨ " (List.map cDPLLAtom clause))))
+    (text ("(or " ++ (String.concat (List.intersperse " " (List.map cDPLLAtom clause))) ++ ")"))
 
 
 cDPLLAtom : DPLLAtom -> String
 cDPLLAtom { get, negated } =
-  (if negated then "¬" else "") ++ exprTToString get
+  if negated then "(not " ++ get ++ ")" else get
 
-
+cDPLLBoundVars : List ( String, ExprT ) -> Element Event
+cDPLLBoundVars binds =
+  column [ Font.family [ Font.monospace ] ]
+    (binds |> List.map
+      (\(v, e) -> text (v ++ " := " ++ exprTToString e))
+    )
 
 -- Shared
 

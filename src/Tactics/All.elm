@@ -3,6 +3,7 @@ module Tactics.All exposing (..)
 import Tactic exposing (Tactic)
 import Tactics.TacEntry as TacEntry
 import Tactics.TacTopLevelExpr as TacTopLevelExpr
+import Tactics.TacDPLL as TacDPLL
 
 all : List Tactic
 all =
@@ -15,4 +16,6 @@ all =
   , TacTopLevelExpr.tacRewriteBoolITE
   , TacTopLevelExpr.tacEqToBiImpl
   , TacTopLevelExpr.tacStartDPLL
+  , TacDPLL.tacPropagateUnit
+  , TacDPLL.tacRemoveDuplicateAtoms
   ]
