@@ -11,6 +11,7 @@ type Event
   | UserChangedVarType Int String
   | UserDeletedVar Int
   | UserChangedText String
+  | UserClickedDPLLTab Int
   | UserChangedTacticArg Int Int String
   | UserClickedTactic TacticSelector
   | UserClickedUndo

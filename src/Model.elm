@@ -10,7 +10,7 @@ import Tactic exposing (Tactic)
 import Tactics.All
 
 type alias Model =
-  { currentCanvas : Canvas
+  { topCanvas : Canvas
   , canvasHistory : List Canvas
   , tacticSelectors : Array TacticSelector
   , messagePanelText : String
@@ -24,7 +24,7 @@ type alias TacticSelector =
 
 initialModel : Model
 initialModel =
-  { currentCanvas =
+  { topCanvas =
       Data.Canvas.MkCEntry
         { uninterpSorts = Array.fromList [ ]
         , variables = Array.fromList [ ("x", "Bool"), ("y", "Bool"), ("z", "Bool") ]

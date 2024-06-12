@@ -123,6 +123,7 @@ tacStartDPLL =
               ( st1, dpllBranch ) = extractBranch st0 branch in
               { varContext = tle.varContext
               , branches = [ dpllBranch ]
+              , activeBranch = 0
               , boundVars = st1.binds
               } |> MkCDPLL |> Ok
         Err err ->
@@ -337,11 +338,14 @@ extractClause = listTraverseST extractAtom
 
 extractAtom : ExtractST -> Atom -> ( ExtractST, DPLLAtom )
 extractAtom st a =
-  case listSplitOnFirst (Tuple.second >> exprTEq a.get) st.binds of
-    Nothing ->
-      let var = "$" ++ (String.fromInt st.firstUnused)
-      in  Tuple.pair
-            { binds = ( var, a.get ) :: st.binds, firstUnused = st.firstUnused + 1 }
-            { get = var, negated = a.negated }
-    Just ( b1, b, b2 ) ->
-      ( { st | binds = b :: b1 ++ b2 }, { get = Tuple.first b, negated = a.negated } )
+  case a.get of
+    ExprT boolVar BoolSort [] ->
+      ( st, { get = boolVar, negated = a.negated } )
+    _ -> case listSplitOnFirst (Tuple.second >> exprTEq a.get) st.binds of
+      Nothing ->
+        let var = "$" ++ (String.fromInt st.firstUnused)
+        in  Tuple.pair
+              { binds = ( var, a.get ) :: st.binds, firstUnused = st.firstUnused + 1 }
+              { get = var, negated = a.negated }
+      Just ( b1, b, b2 ) ->
+        ( { st | binds = b :: b1 ++ b2 }, { get = Tuple.first b, negated = a.negated } )

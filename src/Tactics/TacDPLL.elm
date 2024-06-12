@@ -1,8 +1,8 @@
 module Tactics.TacDPLL exposing (..)
 
+import Common exposing (listDelete, listFindFirstWhere, listOneMustSucceed, listRemoveDuplicates, listReplace, listSplitOnFirst)
+import Data.Canvas exposing (Canvas(..), DPLLBranch, DPLLClause, DPLLAtom, activeBranch, setActiveBranch)
 import Tactic exposing (Tactic)
-import Data.Canvas exposing (Canvas(..), DPLLBranch, DPLLClause, DPLLAtom)
-import Common exposing (listFindFirstWhere, listOneMustSucceed, listRemoveDuplicates, listSplitOnFirst)
 
 
 
@@ -15,13 +15,13 @@ tacSplitOn =
   , fromCanvas = "DPLL"
   , params = [ "x" ]
   , run = \args c -> case c of
-      MkCDPLL dpll -> case dpll.branches of
-        branch :: rest -> case args of
+      MkCDPLL dpll -> case activeBranch dpll of
+        Just branch -> case args of
           [ x ] ->
             let ( b1, b2 ) = splitOn x branch in
-            Ok (MkCDPLL { dpll | branches = b1 :: b2 :: rest })
+            Ok (MkCDPLL { dpll | branches = listReplace dpll.activeBranch [ b1, b2 ] dpll.branches })
           _ -> Err "Unexpected arguments"
-        _ -> Err "Must have at least one branch"
+        Nothing -> Err "Must have at least one branch"
       _ -> Err "Wrong canvas type"
   }
 
@@ -32,11 +32,11 @@ tacPropagateUnit =
   , params = [ "x" ]
   , run = \args c -> case c of
       MkCDPLL dpll -> case args of
-        [ x ] -> case dpll.branches of
-          [] -> Err "Must have at least one branch to propagate unit"
-          (firstBranch::rest) ->
-            propagateUnit x firstBranch
-            |> Result.map (\newFirstBranch -> MkCDPLL { dpll | branches = newFirstBranch::rest })
+        [ x ] -> case activeBranch dpll of
+          Just branch ->
+            propagateUnit x branch
+            |> Result.map (setActiveBranch dpll >> MkCDPLL)
+          Nothing -> Err "Must have at least one branch to propagate unit"
         _ -> Err "Invalid arguments"
       _ -> Err "Wrong canvas type"
   }
@@ -47,12 +47,12 @@ tacRemoveDuplicateAtoms =
   , fromCanvas = "DPLL"
   , params = []
   , run = \_ c -> case c of
-      MkCDPLL dpll -> case dpll.branches of
-        branch :: rest -> case listOneMustSucceed removeDuplicateAtoms branch.clauses of
+      MkCDPLL dpll -> case activeBranch dpll of
+        Just branch -> case listOneMustSucceed removeDuplicateAtoms branch.clauses of
           Just newClauses ->
-            Ok (MkCDPLL { dpll | branches = { branch | clauses = newClauses } :: rest })
+            Ok (MkCDPLL (setActiveBranch dpll { branch | clauses = newClauses }))
           Nothing -> Err "Nothing to simplify"
-        _ -> Err "Must have at least one branch"
+        Nothing -> Err "Must have at least one branch"
       _ -> Err "Wrong canvas type"
   }
 
@@ -62,12 +62,12 @@ tacFoundEmptyClause =
   , fromCanvas = "DPLL"
   , params = []
   , run = \_ c -> case c of
-      MkCDPLL dpll -> case dpll.branches of
-        branch :: rest ->
+      MkCDPLL dpll -> case activeBranch dpll of
+        Just branch ->
           if List.any List.isEmpty branch.clauses then
-            Ok (MkCDPLL { dpll | branches = rest })
+            Ok (MkCDPLL { dpll | branches = listDelete dpll.activeBranch dpll.branches })
           else Err "No empty clause found"
-        [] -> Err "Must have at least one branch"
+        Nothing -> Err "Must have at least one branch"
       _ -> Err "Wrong canvas type"
   }
 

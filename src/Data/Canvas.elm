@@ -2,6 +2,7 @@ module Data.Canvas exposing (..)
 
 import Array exposing (Array)
 import Dict exposing (Dict)
+import Common exposing (listGet, listSet)
 import Data.Typechecked exposing (Sort, FuncType, ExprT)
 
 type Canvas
@@ -29,6 +30,7 @@ type alias CTopLevelExpr =
 type alias CDPLL =
   { varContext : VarContext
   , branches : List DPLLBranch
+  , activeBranch : Int
   , boundVars : List ( String, ExprT )
   }
 
@@ -44,6 +46,13 @@ type alias DPLLAtom =
   , negated : Bool
   }
 
+activeBranch : CDPLL -> Maybe DPLLBranch
+activeBranch dpll =
+  listGet dpll.activeBranch dpll.branches
+
+setActiveBranch : CDPLL -> DPLLBranch -> CDPLL
+setActiveBranch dpll branch =
+  { dpll | branches = listSet dpll.activeBranch branch dpll.branches }
 
 
 -- Shared

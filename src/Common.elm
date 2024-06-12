@@ -103,18 +103,33 @@ resultsPartition results =
 -- Extra `List` functions
 
 
-{-| Splits `l` into two lists at the first element satisfying `predicate`. -}
-listSplitOnFirst : (a -> Bool) -> List a -> Maybe ( List a, a, List a )
-listSplitOnFirst predicate l =
+{-| Get the list element at `index`. -}
+listGet : Int -> List a -> Maybe a
+listGet index l =
   case l of
+    x :: xs -> case index of
+      0 -> Just x
+      _ -> listGet (index - 1) xs
     [] -> Nothing
-    (x::xs) ->
-      if predicate x then
-        Just ( [], x, xs )
-      else
-        listSplitOnFirst predicate xs
-        |> Maybe.map (\( l1, y, l2 ) -> ( x::l1, y, l2 ))
 
+{-| Removes the element at `index` and inserts `repl` in its place. -}
+listReplace : Int -> List a -> List a -> List a
+listReplace index repl l =
+  case l of
+    x :: xs -> case index of
+      0 -> repl ++ xs
+      _ -> x :: listReplace (index - 1) repl xs
+    [] -> []
+
+{-| Set an index in a list. Leaves the list unchanged if the index doesn't exist. -}
+listSet : Int -> a -> List a -> List a
+listSet index elem = listReplace index [ elem ]
+
+{-| Deletes the element at `index`. -}
+listDelete : Int -> List a -> List a
+listDelete index = listReplace index []
+
+{-| Splits `l` into two lists at the first element where `f` returns `Just`. -}
 listFindFirstWhere : (a -> Maybe b) -> List a -> Maybe ( List a, b, List a )
 listFindFirstWhere f l =
   case l of
@@ -123,6 +138,11 @@ listFindFirstWhere f l =
       Just y -> Just ( [], y, xs )
       Nothing -> listFindFirstWhere f xs
         |> Maybe.map (\( l1, y, l2 ) -> ( x :: l1, y, l2 ))
+
+{-| Splits `l` into two lists at the first element satisfying `predicate`. -}
+listSplitOnFirst : (a -> Bool) -> List a -> Maybe ( List a, a, List a )
+listSplitOnFirst predicate =
+  listFindFirstWhere (\x -> if predicate x then Just x else Nothing)
 
 listIndexedMap2 : (Int -> a -> b -> c) -> List a -> List b -> List c
 listIndexedMap2 f l1 l2 =
@@ -145,6 +165,8 @@ listRemoveDuplicates l =
       let simpl = listRemoveDuplicates xs in
       if List.member x simpl then simpl else x :: simpl
 
+{-| Maps `f` over `l`, but use the element as a default if
+`f` returns `Nothing`. Returns `Nothing` if all `f`s produce `Nothing`. -}
 listOneMustSucceed : (a -> Maybe a) -> List a -> Maybe (List a)
 listOneMustSucceed f l =
   let mapped = List.map f l in

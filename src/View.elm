@@ -2,7 +2,7 @@ module View exposing (view)
 
 import Array exposing (Array)
 import Dict
-import Element exposing (Element, el, text, row, column, fill, width, height, rgb255, padding, paddingXY)
+import Element exposing (Element, el, text, row, column, fill, width, height, rgb255, padding, paddingXY, spacing)
 import Element.Background as Bg
 import Element.Font as Font
 import Element.Input as Input
@@ -43,7 +43,7 @@ headerStrip =
   row
     [ width fill
     , padding 5
-    , Border.widthEach { bottom=1, left=0, right=0, top=0 }
+    , Border.widthEach { noBorders | bottom = 1 }
     , Border.color grey3
     ]
     [ text "Select an example: "
@@ -80,7 +80,7 @@ tacticPanel tacSelectors =
   column
     [ width fill, height fill
     , padding 5
-    , Border.widthEach { bottom=1, left=0, right=0, top=0 }
+    , Border.widthEach { noBorders | bottom = 1 }
     , Border.color grey3
     ]
     (List.indexedMap tacticSelector (Array.toList tacSelectors))
@@ -123,7 +123,7 @@ messageBox model =
 
 
 
----
+--- Canvas History
 
 
 canavsHistory : Model -> Element Event
@@ -131,14 +131,15 @@ canavsHistory model =
   column
     [ width fill, height (fill |> Element.maximum 900)
     , padding 10
-    , Border.widthEach { bottom=0, left=0, right=1, top=0 }
+    , Border.widthEach { noBorders | right = 1 }
     , Border.color grey3
-    , Element.scrollbars
+    , Element.scrollbarY
+    , Element.clipX
     ]
-    (viewCanvas model.currentCanvas :: List.map viewCanvas model.canvasHistory)
+    (viewCanvas True model.topCanvas :: List.map (viewCanvas False) model.canvasHistory)
 
-viewCanvas : Canvas -> Element Event
-viewCanvas canvas =
+viewCanvas : Bool -> Canvas -> Element Event
+viewCanvas isTop canvas =
   el [ padding 5, width fill ]
     (el
       [ padding 5
@@ -148,7 +149,7 @@ viewCanvas canvas =
       (case canvas of
         Canvas.MkCEntry c -> cEntry c
         Canvas.MkCTopLevelExpr c -> cTopLevelExpr c
-        Canvas.MkCDPLL c -> cDPLL c
+        Canvas.MkCDPLL c -> cDPLL isTop c
         Canvas.MkCUnsat -> cUnsat
       )
     )
@@ -250,38 +251,73 @@ cTopLevelExpr canvas =
 -- CDPLL
 
 
-cDPLL : CDPLL -> Element Event
-cDPLL c =
-  column [ width fill, height fill ]
-    [ el [ Border.widthEach { bottom=1, left=0, right=0, top=0 } ]
-      (text "DPLL")
-    , case c.branches of
-        [] -> text "No branches!"
-        [ branch ] -> cDPLLBranch branch
-        branch :: rest ->
-          column []
-            [ cDPLLBranch branch
-            , text (String.fromInt (List.length rest) ++ " more branch(es)")
-            ]
-    , cDPLLBoundVars c.boundVars
+cDPLL : Bool -> CDPLL -> Element Event
+cDPLL isTop dpll =
+  column [ width fill, height fill, spacing 5 ]
+    [ cDPLLTabs isTop dpll
+    , cDPLLClauseList dpll
+    , cDPLLBoundVars dpll.boundVars
     ]
 
-cDPLLBranch : DPLLBranch -> Element Event
-cDPLLBranch branch =
-  column [ padding 5, Font.family [ Font.monospace ] ]
-    (   cDPLLPartialSolution branch.partialSol
-     :: List.map cDPLLClause branch.clauses
+cDPLLTabs : Bool -> CDPLL -> Element Event
+cDPLLTabs isTop dpll =
+  row [ width fill ]
+    [ el
+        [ padding 5, height fill
+        , Border.widthEach { noBorders | bottom = 1 }
+        , Border.color grey3
+        ]
+        (text "DPLL")
+    , row []
+        (dpll.branches
+        |> List.map .partialSol
+        |> List.indexedMap (cDPLLTab isTop dpll.activeBranch)
+        )
+    , el
+        [ width fill, height fill, padding 5
+        , Font.italic, Font.family [ Font.sansSerif ]
+        , Border.widthEach { noBorders | bottom = 1 }
+        , Border.color grey3
+        ]
+        (if dpll.branches == [] then text "no branches" else Element.none)
+    ]
+
+cDPLLTab : Bool -> Int -> Int -> List DPLLAtom -> Element Event
+cDPLLTab topCanvas activeTab idx partialSol =
+  Input.button (attrsTab (activeTab == idx))
+    { label = cDPLLTabLabel partialSol
+    , onPress = if topCanvas then (Just (UserClickedDPLLTab idx)) else Nothing
+    }
+
+
+cDPLLTabLabel : List DPLLAtom -> Element Event
+cDPLLTabLabel partialSol =
+  case partialSol of
+    [] ->  text "⊤"
+    _ -> text (String.concat (List.intersperse " " (List.map cDPLLAtomShort partialSol)))
+
+cDPLLClauseList : CDPLL -> Element Event
+cDPLLClauseList dpll =
+  column
+    [ spacing 5
+    , Font.family [ Font.monospace ]
+    ]
+    (activeBranch dpll
+    |> Maybe.map (.clauses >> List.map cDPLLClause)
+    |> Maybe.withDefault [ Element.none ]
     )
 
 cDPLLClause : DPLLClause -> Element Event
 cDPLLClause clause =
-  el [ padding 5 ]
-    (text ("(or " ++ (String.concat (List.intersperse " " (List.map cDPLLAtom clause))) ++ ")"))
-
+  text ("(or " ++ (String.concat (List.intersperse " " (List.map cDPLLAtom clause))) ++ ")")
 
 cDPLLAtom : DPLLAtom -> String
 cDPLLAtom { get, negated } =
   if negated then "(not " ++ get ++ ")" else get
+
+cDPLLAtomShort : DPLLAtom -> String
+cDPLLAtomShort { get, negated } =
+  if negated then "¬" ++ get else get
 
 cDPLLBoundVars : List ( String, ExprT ) -> Element Event
 cDPLLBoundVars binds =
@@ -289,14 +325,6 @@ cDPLLBoundVars binds =
     (binds |> List.map
       (\(v, e) -> text (v ++ " := " ++ exprTToString e))
     )
-
-cDPLLPartialSolution : List DPLLAtom -> Element Event
-cDPLLPartialSolution atoms =
-  row []
-    [ text "Partial Solution: "
-    , text ("(and " ++ String.concat (List.intersperse " " (List.map cDPLLAtom atoms)) ++ ")")
-    ]
-  
 
 
 
@@ -328,6 +356,18 @@ attrsButton =
   , Border.width 1, Border.color grey4, Border.rounded 5
   ]
 
+attrsTab : Bool -> List (Element.Attribute msg)
+attrsTab active =
+  [ padding 5
+  , Font.family [ Font.monospace ]
+  , Font.color (if active then white else grey4)
+  , Element.mouseOver [ Font.color white, Border.color white ]
+  , Bg.color grey2
+  , Border.widthEach { thinBorders | bottom = if active then 0 else 1 }
+  , Border.color (if active then white else grey3)
+  , Border.roundEach { topLeft=5, topRight=5, bottomLeft=0, bottomRight=0 }
+  ]
+
 -- grey1 = rgb255 0x11 0x11 0x11
 grey2 : Element.Color
 grey2 = rgb255 0x28 0x28 0x28
@@ -337,3 +377,9 @@ grey4 : Element.Color
 grey4 = rgb255 0xaa 0xaa 0xaa
 white : Element.Color
 white = rgb255 0xff 0xff 0xff
+
+thinBorders : { bottom : Int, left : Int, right : Int, top : Int }
+thinBorders = { bottom = 1, left = 1, right = 1, top = 1 }
+
+noBorders : { bottom : Int, left : Int, right : Int, top : Int }
+noBorders = { bottom = 0, left = 0, right = 0, top = 0 }

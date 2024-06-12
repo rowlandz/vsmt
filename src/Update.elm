@@ -12,60 +12,66 @@ update event model =
   case event of
     
     UserAddedSort ->
-      case model.currentCanvas of
+      case model.topCanvas of
         MkCEntry entry ->
-          { model | currentCanvas = MkCEntry { entry | uninterpSorts = Array.push "" entry.uninterpSorts } }
+          { model | topCanvas = MkCEntry { entry | uninterpSorts = Array.push "" entry.uninterpSorts } }
         _ -> model
 
     UserChangedSortName idx newName ->
-      case model.currentCanvas of
+      case model.topCanvas of
         MkCEntry entry ->
           let newSorts = Array.set idx newName entry.uninterpSorts
-          in  { model | currentCanvas = MkCEntry { entry | uninterpSorts = newSorts } }
+          in  { model | topCanvas = MkCEntry { entry | uninterpSorts = newSorts } }
         _ -> model
 
     UserDeletedSort idx ->
-      case model.currentCanvas of
+      case model.topCanvas of
         MkCEntry entry ->
-          { model | currentCanvas = MkCEntry { entry | uninterpSorts = arrayDeleteNth idx entry.uninterpSorts } }
+          { model | topCanvas = MkCEntry { entry | uninterpSorts = arrayDeleteNth idx entry.uninterpSorts } }
         _ -> model
 
     UserAddedVar ->
-      case model.currentCanvas of
+      case model.topCanvas of
         MkCEntry entry ->
-          { model | currentCanvas = MkCEntry { entry | variables = Array.push ( "", "" ) entry.variables } }
+          { model | topCanvas = MkCEntry { entry | variables = Array.push ( "", "" ) entry.variables } }
         _ -> model
 
     UserChangedVarName idx newName ->
-      case model.currentCanvas of
+      case model.topCanvas of
         MkCEntry entry ->
           case Array.get idx entry.variables of
             Just (_, varType) ->
               let newVars = Array.set idx (newName, varType) entry.variables
-              in  { model | currentCanvas = MkCEntry { entry | variables = newVars } }
+              in  { model | topCanvas = MkCEntry { entry | variables = newVars } }
             Nothing -> model
         _ -> model
 
     UserChangedVarType idx newType ->
-      case model.currentCanvas of
+      case model.topCanvas of
         MkCEntry entry ->
           case Array.get idx entry.variables of
             Just (varName, _) ->
               let newVars = Array.set idx (varName, newType) entry.variables
-              in  { model | currentCanvas = MkCEntry { entry | variables = newVars } }
+              in  { model | topCanvas = MkCEntry { entry | variables = newVars } }
             Nothing -> model
         _ -> model
 
     UserChangedText newText ->
-      case model.currentCanvas of
+      case model.topCanvas of
         MkCEntry entry ->
-          { model | currentCanvas = MkCEntry { entry | expr = newText } }
+          { model | topCanvas = MkCEntry { entry | expr = newText } }
+        _ -> model
+
+    UserClickedDPLLTab idx ->
+      case model.topCanvas of
+        MkCDPLL dpll ->
+          { model | topCanvas = MkCDPLL { dpll | activeBranch = idx } }
         _ -> model
 
     UserDeletedVar idx ->
-      case model.currentCanvas of
+      case model.topCanvas of
         MkCEntry entry ->
-          { model | currentCanvas = MkCEntry { entry | variables = arrayDeleteNth idx entry.variables } }
+          { model | topCanvas = MkCEntry { entry | variables = arrayDeleteNth idx entry.variables } }
         _ -> model
 
     UserChangedTacticArg tacIdx argIdx value ->
@@ -77,10 +83,10 @@ update event model =
         Nothing -> model |> withMsg "Param not found"
 
     UserClickedTactic tacticSelector ->
-      case tacticSelector.tactic.run (Array.toList tacticSelector.args) model.currentCanvas of
+      case tacticSelector.tactic.run (Array.toList tacticSelector.args) model.topCanvas of
         Ok newCanvas ->
-          { currentCanvas = newCanvas
-          , canvasHistory = model.currentCanvas :: model.canvasHistory
+          { topCanvas = newCanvas
+          , canvasHistory = model.topCanvas :: model.canvasHistory
           , tacticSelectors = makeTacticSelectorsFor (getCanvasType newCanvas)
           , messagePanelText = ""
           }
@@ -90,7 +96,7 @@ update event model =
       case model.canvasHistory of
         [] -> model |> withMsg "Nothing to undo"
         (c :: cs) ->
-          { currentCanvas = c
+          { topCanvas = c
           , canvasHistory = cs
           , tacticSelectors = makeTacticSelectorsFor (getCanvasType c)
           , messagePanelText = ""
@@ -99,7 +105,7 @@ update event model =
     UserSelectedExample example ->
       case Dict.get example ExampleEntries.examples of
         Just centry ->
-          { currentCanvas = MkCEntry centry
+          { topCanvas = MkCEntry centry
           , canvasHistory = []
           , tacticSelectors = makeTacticSelectorsFor "Entry"
           , messagePanelText = ""

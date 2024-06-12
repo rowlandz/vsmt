@@ -40,4 +40,18 @@ examples =
               ++ ")"
         }
       )
+    , Tuple.pair "DPLL example"
+      { uninterpSorts = Array.empty
+      , variables = Array.fromList [ ( "a", "Bool" ), ( "b", "Bool" ), ( "c", "Bool" ), ( "d", "Bool" ) ]
+      , expr = "(and\n"
+            ++ "  (or (not a) b c)\n"
+            ++ "  (or a c d)\n"
+            ++ "  (or a c (not d))\n"
+            ++ "  (or a (not c) d)\n"
+            ++ "  (or a (not c) (not d))\n"
+            ++ "  (or (not b) (not c) d)\n"
+            ++ "  (or (not a) b (not c))\n"
+            ++ "  (or (not a) (not b) c)\n"
+            ++ ")"
+      }
     ]
