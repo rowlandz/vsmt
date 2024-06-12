@@ -29,7 +29,7 @@ examples =
     , ( "absolute value"
       , { uninterpSorts = Array.empty
         , variables = Array.fromList [ ( "x", "Real" ) ]
-        , expr = "(>= (if (< x 0) (neg x) x) 0)"
+        , expr = "(not (>= (if (< x 0) (neg x) x) 0))"
         }
       )
     , ( "demorgan's rule"

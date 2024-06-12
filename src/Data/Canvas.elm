@@ -8,6 +8,7 @@ type Canvas
   = MkCEntry CEntry
   | MkCTopLevelExpr CTopLevelExpr
   | MkCDPLL CDPLL
+  | MkCUnsat
 
 type alias CEntry =
   { uninterpSorts : Array String
@@ -31,7 +32,10 @@ type alias CDPLL =
   , boundVars : List ( String, ExprT )
   }
 
-type alias DPLLBranch = List DPLLClause
+type alias DPLLBranch =
+  { clauses : List DPLLClause
+  , partialSol : List DPLLAtom
+  }
 
 type alias DPLLClause = List DPLLAtom
 
@@ -56,3 +60,4 @@ getCanvasType canvas =
     MkCEntry _        -> "Entry"
     MkCTopLevelExpr _ -> "TopLevelExpr"
     MkCDPLL _         -> "DPLL"
+    MkCUnsat          -> "Unsat"

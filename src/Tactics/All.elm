@@ -16,6 +16,9 @@ all =
   , TacTopLevelExpr.tacRewriteBoolITE
   , TacTopLevelExpr.tacEqToBiImpl
   , TacTopLevelExpr.tacStartDPLL
+  , TacDPLL.tacSplitOn
   , TacDPLL.tacPropagateUnit
   , TacDPLL.tacRemoveDuplicateAtoms
+  , TacDPLL.tacFoundEmptyClause
+  , TacDPLL.tacNoBranches
   ]

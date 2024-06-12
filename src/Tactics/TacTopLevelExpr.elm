@@ -9,13 +9,10 @@ module Tactics.TacTopLevelExpr exposing
   , tacStartDPLL
   )
 
-import Common exposing (allMustSucceed, greedy, greedy1, orElse, listSplitOnFirst)
-import Data.Typechecked exposing (ExprT(..), Sort(..), getHead, getSort, getSubs)
+import Common exposing (allMustSucceed, greedy, greedy1, listSplitOnFirst, listTraverseST, orElse, yielding)
+import Data.Typechecked exposing (ExprT(..), Sort(..), exprTEq, getHead, getSort, getSubs)
 import Data.Canvas exposing (Canvas(..), DPLLBranch, DPLLAtom, DPLLClause)
 import Tactic exposing (Tactic)
-import Common exposing (yielding)
-import Data.Typechecked exposing (exprTEq)
-import Common exposing (listTraverseST)
 
 
 
@@ -328,7 +325,12 @@ type alias ExtractST =
   }
 
 extractBranch : ExtractST -> List (List Atom) -> ( ExtractST, DPLLBranch )
-extractBranch = listTraverseST extractClause
+extractBranch st llatoms =
+  extractClauses st llatoms
+  |> Tuple.mapSecond (\clauses -> { partialSol = [], clauses = clauses })
+
+extractClauses : ExtractST -> List (List Atom) -> ( ExtractST, List DPLLClause )
+extractClauses = listTraverseST extractClause
 
 extractClause : ExtractST -> List Atom -> ( ExtractST, DPLLClause )
 extractClause = listTraverseST extractAtom

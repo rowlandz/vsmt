@@ -1,23 +1,21 @@
 module View exposing (view)
 
 import Array exposing (Array)
-import Html exposing (Html)
-import Element exposing (Element, el, text, row, column, fill, fillPortion, width, height, rgb255, padding, paddingXY, px, mouseOver)
+import Dict
+import Element exposing (Element, el, text, row, column, fill, width, height, rgb255, padding, paddingXY)
 import Element.Background as Bg
 import Element.Font as Font
 import Element.Input as Input
 import Element.Border as Border
-import Data.Canvas as Canvas exposing (..)
-import Data.Typechecked exposing (exprTToString)
-import Model exposing (Model, TacticSelector)
-import Event exposing (Event(..))
+import Html exposing (Html)
 import Html.Attributes
 import Html.Events
-import ExampleEntries
-import Dict
 import Common exposing (listIndexedMap2)
-import Data.Typechecked exposing (ExprT)
-import Element exposing (paragraph)
+import Data.Canvas as Canvas exposing (..)
+import Data.Typechecked exposing (ExprT, exprTToString)
+import Event exposing (Event(..))
+import ExampleEntries
+import Model exposing (Model, TacticSelector)
 
 view : Model -> Html Event
 view model = Element.layout [] (mainElement model)
@@ -28,11 +26,12 @@ mainElement model =
     [ width fill, height fill
     , Font.family [ Font.sansSerif ], Font.size 14, Font.color white
     , Bg.color grey2
+    , Element.clip
     ]
     [ headerStrip
     , row [ width fill, height fill ]
         [ canavsHistory model
-        , column [ width (fillPortion 1), height fill ]
+        , column [ width fill, height fill ]
             [ tacticPanel model.tacticSelectors
             , messageBox model
             ]
@@ -100,7 +99,7 @@ tacticSelector tacIdx tacSelector =
 tacticSelectorParam : Int -> Int -> String -> String -> Element Event
 tacticSelectorParam tacIdx paramIdx name value  =
   el [ paddingXY 10 0 ]
-    (Input.text (attrsCodeInput ++ [ width (px 80) ])
+    (Input.text (attrsCodeInput ++ [ width (Element.px 80) ])
       { text = value
       , onChange = Event.UserChangedTacticArg tacIdx paramIdx
       , label = Input.labelLeft [] (text (name ++ " = "))
@@ -130,16 +129,17 @@ messageBox model =
 canavsHistory : Model -> Element Event
 canavsHistory model =
   column
-    [ width (fillPortion 1), height fill
+    [ width fill, height (fill |> Element.maximum 900)
     , padding 10
     , Border.widthEach { bottom=0, left=0, right=1, top=0 }
     , Border.color grey3
+    , Element.scrollbars
     ]
     (viewCanvas model.currentCanvas :: List.map viewCanvas model.canvasHistory)
 
 viewCanvas : Canvas -> Element Event
 viewCanvas canvas =
-  el [ padding 5, width fill]
+  el [ padding 5, width fill ]
     (el
       [ padding 5
       , width fill
@@ -149,6 +149,7 @@ viewCanvas canvas =
         Canvas.MkCEntry c -> cEntry c
         Canvas.MkCTopLevelExpr c -> cTopLevelExpr c
         Canvas.MkCDPLL c -> cDPLL c
+        Canvas.MkCUnsat -> cUnsat
       )
     )
 
@@ -242,7 +243,7 @@ varEntry idx (varName, varType) =
 cTopLevelExpr : CTopLevelExpr -> Element Event
 cTopLevelExpr canvas =
   el [ Font.family [ Font.monospace ] ]
-    (paragraph [] [ text (exprTToString canvas.expr) ])
+    (Element.paragraph [] [ text (exprTToString canvas.expr) ])
 
 
 
@@ -268,7 +269,9 @@ cDPLL c =
 cDPLLBranch : DPLLBranch -> Element Event
 cDPLLBranch branch =
   column [ padding 5, Font.family [ Font.monospace ] ]
-    (List.map cDPLLClause branch)
+    (   cDPLLPartialSolution branch.partialSol
+     :: List.map cDPLLClause branch.clauses
+    )
 
 cDPLLClause : DPLLClause -> Element Event
 cDPLLClause clause =
@@ -287,6 +290,24 @@ cDPLLBoundVars binds =
       (\(v, e) -> text (v ++ " := " ++ exprTToString e))
     )
 
+cDPLLPartialSolution : List DPLLAtom -> Element Event
+cDPLLPartialSolution atoms =
+  row []
+    [ text "Partial Solution: "
+    , text ("(and " ++ String.concat (List.intersperse " " (List.map cDPLLAtom atoms)) ++ ")")
+    ]
+  
+
+
+
+-- CUnsat
+
+
+cUnsat : Element Event
+cUnsat = text "UNSAT"
+
+
+
 -- Shared
 
 
@@ -302,7 +323,7 @@ attrsButton : List (Element.Attribute msg)
 attrsButton =
   [ padding 5
   , Font.family [ Font.sansSerif ], Font.color grey4
-  , mouseOver [ Font.color white, Border.color white ]
+  , Element.mouseOver [ Font.color white, Border.color white ]
   , Bg.color grey2
   , Border.width 1, Border.color grey4, Border.rounded 5
   ]
