@@ -114,20 +114,23 @@ listGet index l =
 
 {-| Removes the element at `index` and inserts `repl` in its place. -}
 listReplace : Int -> List a -> List a -> List a
-listReplace index repl l =
+listReplace index repl = listReplaceTailRec [] index repl
+
+listReplaceTailRec : List a -> Int -> List a -> List a -> List a
+listReplaceTailRec prepend index repl l =
   case l of
     x :: xs -> case index of
-      0 -> repl ++ xs
-      _ -> x :: listReplace (index - 1) repl xs
-    [] -> []
+      0 -> List.reverse prepend ++ repl ++ xs
+      _ -> listReplaceTailRec (x :: prepend) (index - 1) repl xs
+    [] -> List.reverse prepend
 
 {-| Set an index in a list. Leaves the list unchanged if the index doesn't exist. -}
 listSet : Int -> a -> List a -> List a
-listSet index elem = listReplace index [ elem ]
+listSet index elem = listReplaceTailRec [] index [ elem ]
 
 {-| Deletes the element at `index`. -}
 listDelete : Int -> List a -> List a
-listDelete index = listReplace index []
+listDelete index = listReplaceTailRec [] index []
 
 {-| Splits `l` into two lists at the first element where `f` returns `Just`. -}
 listFindFirstWhere : (a -> Maybe b) -> List a -> Maybe ( List a, b, List a )
@@ -148,15 +151,6 @@ listIndexedMap2 : (Int -> a -> b -> c) -> List a -> List b -> List c
 listIndexedMap2 f l1 l2 =
   List.indexedMap (\i ( a, b ) -> f i a b) (List.map2 Tuple.pair l1 l2)
 
-listTraverseST : (st -> a -> ( st, b )) -> st -> List a -> ( st, List b )
-listTraverseST f st la =
-  case la of
-    [] -> ( st, [] )
-    x::xs ->
-      let ( st1, y ) = f st x
-          ( st2, ys ) = listTraverseST f st1 xs in
-          ( st2, y :: ys )
-
 listRemoveDuplicates : List a -> List a
 listRemoveDuplicates l =
   case l of
@@ -172,3 +166,45 @@ listOneMustSucceed f l =
   let mapped = List.map f l in
   if List.all (\m -> m == Nothing) mapped then Nothing
   else Just (List.map2 Maybe.withDefault l mapped)
+
+
+
+-- State Transformers
+
+
+{-| A state transformer. i.e. a function that returns an `a` while
+transforming a state `s` -}
+type alias ST s a = s -> (a, s)
+
+{-| The state transformer tha returns `a` and leaves the state untouched. -}
+returnST : a -> ST s a
+returnST a = Tuple.pair a
+
+{-| Reads a `proj`ection of the state, then continues with `thenDo`. -}
+inspectThenST : (s -> a) -> (a -> ST s b) -> ST s b
+inspectThenST proj thenDo = \s -> thenDo (proj s) s
+
+{-| Reads the state, then continues with `thenDo` -}
+getThenST : (s -> ST s b) -> ST s b
+getThenST thenDo = \s -> thenDo s s
+
+{-| Modifies the state with `f`, then continues with `thenDo`. -}
+modifyThenST : (s -> s) -> ST s a -> ST s a
+modifyThenST f thenDo = f >> thenDo
+
+{-| Maps a state-transforming function over a list from left to right. -}
+traverseST : (a -> ST s b) -> List a -> ST s (List b)
+traverseST = traverseTailRec []
+
+{-| Traverses list `l` via `f`, then continues with `thenDo`. -}
+traverseThenST : (a -> ST s b) -> List a -> (List b -> ST s c) -> ST s c
+traverseThenST f l thenDo =
+  \s -> let ( bs, s1 ) = traverseTailRec [] f l s in thenDo bs s1
+
+traverseTailRec : List b -> (a -> ST s b) -> List a -> s -> ( List b, s )
+traverseTailRec accum f la s =
+  case la of
+    [] -> ( List.reverse accum, s )
+    x :: xs ->
+      let ( y, s1 ) = f x s in
+      traverseTailRec (y :: accum) f xs s1

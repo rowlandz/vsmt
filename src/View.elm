@@ -149,6 +149,8 @@ viewCanvas isTop canvas =
       (case canvas of
         Canvas.MkCEntry c -> cEntry c
         Canvas.MkCTopLevelExpr c -> cTopLevelExpr c
+        Canvas.MkCCNF1 c -> cCNF1 c
+        Canvas.MkCCNF2 c -> cCNF2 c
         Canvas.MkCDPLL c -> cDPLL isTop c
         Canvas.MkCUnsat -> cUnsat
       )
@@ -248,6 +250,47 @@ cTopLevelExpr canvas =
 
 
 
+-- CNF
+
+
+cCNF1 : CCNF1 -> Element Event
+cCNF1 cnf =
+  column [ width fill, height fill, spacing 10 ]
+    [ text "CNF1"
+    , cCNFClauseList exprTToString cnf.clauses
+    ]
+
+cCNF2 : CCNF2 -> Element Event
+cCNF2 cnf =
+  column [ width fill, height fill, spacing 10 ]
+    [ text "CNF2"
+    , cCNFClauseList identity cnf.clauses
+    , cCNFBinds cnf.binds
+    ]
+
+cCNFClauseList : (a -> String) -> List (List (Atom a)) -> Element Event
+cCNFClauseList toString clauses =
+  column [ spacing 5, Font.family [ Font.monospace ] ]
+    (List.map (cCNFClause toString >> text) clauses)
+
+cCNFClause : (a -> String) -> List (Atom a) -> String
+cCNFClause toString =
+    List.map (cCNFAtom toString)
+ >> List.intersperse " "
+ >> String.concat
+ >> (\s -> "(or " ++ s ++ ")")
+
+cCNFAtom : (a -> String) -> Atom a -> String
+cCNFAtom toString { prop, negated } =
+  if negated then "(not " ++ toString prop ++ ")" else toString prop
+
+cCNFBinds : List ( String, ExprT ) -> Element Event
+cCNFBinds binds =
+  column [ spacing 5, Font.family [ Font.monospace ] ]
+    (List.map (\( x, e ) -> text (x ++ " := " ++ exprTToString e)) binds)
+
+
+
 -- CDPLL
 
 
@@ -283,11 +326,14 @@ cDPLLTabs isTop dpll =
     ]
 
 cDPLLTab : Bool -> Int -> Int -> List DPLLAtom -> Element Event
-cDPLLTab topCanvas activeTab idx partialSol =
-  Input.button (attrsTab (activeTab == idx))
-    { label = cDPLLTabLabel partialSol
-    , onPress = if topCanvas then (Just (UserClickedDPLLTab idx)) else Nothing
-    }
+cDPLLTab isTop activeTab idx partialSol =
+  if isTop then
+    Input.button (attrsTab (activeTab == idx))
+      { label = cDPLLTabLabel partialSol
+      , onPress = Just (UserClickedDPLLTab idx)
+      }
+  else
+    el (attrsTab (activeTab == idx)) (cDPLLTabLabel partialSol)
 
 
 cDPLLTabLabel : List DPLLAtom -> Element Event
@@ -296,28 +342,29 @@ cDPLLTabLabel partialSol =
     [] ->  text "⊤"
     _ -> text (String.concat (List.intersperse " " (List.map cDPLLAtomShort partialSol)))
 
+
 cDPLLClauseList : CDPLL -> Element Event
 cDPLLClauseList dpll =
-  column
-    [ spacing 5
-    , Font.family [ Font.monospace ]
-    ]
-    (activeBranch dpll
-    |> Maybe.map (.clauses >> List.map cDPLLClause)
-    |> Maybe.withDefault [ Element.none ]
-    )
+  case activeBranch dpll of
+    Just branch -> case branch.clauses of
+      [] ->
+        el [ Font.italic, Font.family [ Font.sansSerif ] ] (text "no clauses")
+      _ :: _ -> 
+        column [ spacing 5, Font.family [ Font.monospace ] ]
+          (List.map cDPLLClause branch.clauses)
+    Nothing -> Element.none
 
 cDPLLClause : DPLLClause -> Element Event
 cDPLLClause clause =
   text ("(or " ++ (String.concat (List.intersperse " " (List.map cDPLLAtom clause))) ++ ")")
 
 cDPLLAtom : DPLLAtom -> String
-cDPLLAtom { get, negated } =
-  if negated then "(not " ++ get ++ ")" else get
+cDPLLAtom { prop, negated } =
+  if negated then "(not " ++ prop ++ ")" else prop
 
 cDPLLAtomShort : DPLLAtom -> String
-cDPLLAtomShort { get, negated } =
-  if negated then "¬" ++ get else get
+cDPLLAtomShort { prop, negated } =
+  if negated then "¬" ++ prop else prop
 
 cDPLLBoundVars : List ( String, ExprT ) -> Element Event
 cDPLLBoundVars binds =

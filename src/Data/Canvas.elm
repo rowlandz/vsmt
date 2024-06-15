@@ -8,6 +8,8 @@ import Data.Typechecked exposing (Sort, FuncType, ExprT)
 type Canvas
   = MkCEntry CEntry
   | MkCTopLevelExpr CTopLevelExpr
+  | MkCCNF1 CCNF1
+  | MkCCNF2 CCNF2
   | MkCDPLL CDPLL
   | MkCUnsat
 
@@ -24,6 +26,28 @@ type alias CTopLevelExpr =
 
 
 
+-- CNF
+
+
+type alias Atom a =
+  { prop : a
+  , negated : Bool
+  }
+
+type alias CCNF1 =
+  { varContext : VarContext
+  , clauses : List (List (Atom ExprT))
+  }
+
+type alias CCNF2 =
+  { varContext : VarContext
+  , clauses : List (List (Atom String))
+  , binds : List ( String, ExprT )
+  , firstUnused : Int
+  }
+
+
+
 -- DPLL
 
 
@@ -36,15 +60,12 @@ type alias CDPLL =
 
 type alias DPLLBranch =
   { clauses : List DPLLClause
-  , partialSol : List DPLLAtom
+  , partialSol : List (Atom String)
   }
 
-type alias DPLLClause = List DPLLAtom
+type alias DPLLClause = List (Atom String)
 
-type alias DPLLAtom =
-  { get : String
-  , negated : Bool
-  }
+type alias DPLLAtom = Atom String
 
 activeBranch : CDPLL -> Maybe DPLLBranch
 activeBranch dpll =
@@ -68,5 +89,7 @@ getCanvasType canvas =
   case canvas of
     MkCEntry _        -> "Entry"
     MkCTopLevelExpr _ -> "TopLevelExpr"
+    MkCCNF1 _         -> "CNF1"
+    MkCCNF2 _         -> "CNF2"
     MkCDPLL _         -> "DPLL"
     MkCUnsat          -> "Unsat"

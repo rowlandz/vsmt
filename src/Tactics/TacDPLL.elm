@@ -102,14 +102,14 @@ Returns the atom on success, `Nothing` on failure. -}
 isUnitClauseOf : String -> DPLLClause -> Maybe DPLLAtom
 isUnitClauseOf var clause =
   case clause of
-    [ atom ] -> if atom.get == var then Just atom else Nothing
+    [ atom ] -> if atom.prop == var then Just atom else Nothing
     _ -> Nothing
 
 {-| Applies the splitting rule. -}
 splitOn : String -> DPLLBranch -> ( DPLLBranch, DPLLBranch )
 splitOn var branch =
-  let varTrue = { get = var, negated = False }
-      varFalse = { get = var, negated = True } in
+  let varTrue = { prop = var, negated = False }
+      varFalse = { prop = var, negated = True } in
   Tuple.pair
     { partialSol = branch.partialSol ++ [ varTrue ]
     , clauses = List.filterMap (simplifyClauseAssuming varTrue) branch.clauses
@@ -124,7 +124,7 @@ simplifyClauseAssuming : DPLLAtom -> DPLLClause -> Maybe DPLLClause
 simplifyClauseAssuming assump clause =
   case listSplitOnFirst (\atom -> atom == assump) clause of
     Just _ -> Nothing
-    Nothing -> Just (List.filter (\atom -> atom.get /= assump.get) clause)
+    Nothing -> Just (List.filter (\atom -> atom.prop /= assump.prop) clause)
 
 {-| Removes duplicate atoms from a clause. Returns `Nothing` if
 no simplification can be performed. -}

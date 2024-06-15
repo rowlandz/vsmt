@@ -6,13 +6,14 @@ module Tactics.TacTopLevelExpr exposing
   , tacLiftITE
   , tacRewriteBoolITE
   , tacEqToBiImpl
-  , tacStartDPLL
+  , tacCheckCNF
   )
 
-import Common exposing (allMustSucceed, greedy, greedy1, listSplitOnFirst, listTraverseST, orElse, yielding)
-import Data.Typechecked exposing (ExprT(..), Sort(..), exprTEq, getHead, getSort, getSubs)
-import Data.Canvas exposing (Canvas(..), DPLLBranch, DPLLAtom, DPLLClause)
+import Common exposing (allMustSucceed, greedy, greedy1, listSplitOnFirst, orElse, yielding)
+import Data.Typechecked exposing (ExprT(..), Sort(..), getHead, getSort, getSubs)
+import Data.Canvas exposing (Canvas(..), Atom)
 import Tactic exposing (Tactic)
+import Data.Typechecked exposing (exprTToString)
 
 
 
@@ -110,27 +111,46 @@ tacEqToBiImpl =
     _ -> Err "Wrong canvas type"
   }
 
-tacStartDPLL : Tactic
-tacStartDPLL =
-  { name = "start DPLL"
+-- tacStartDPLL : Tactic
+-- tacStartDPLL =
+--   { name = "start DPLL"
+--   , fromCanvas = "TopLevelExpr"
+--   , params = []
+--   , run = \_ c -> case c of
+--     MkCTopLevelExpr tle ->
+--       case validateCNF tle.expr of
+--         Ok branch ->
+--           let st0 = { binds = [], firstUnused = 0 }
+--               ( st1, dpllBranch ) = extractBranch st0 branch in
+--               { varContext = tle.varContext
+--               , branches = [ dpllBranch ]
+--               , activeBranch = 0
+--               , boundVars = st1.binds
+--               } |> MkCDPLL |> Ok
+--         Err err ->
+--           ( "Expression not in conjunctive normal form:\n\n"
+--           ++ String.concat (List.intersperse "\n\n" err)
+--           ) |> Err
+--     _ -> Err "Wrong canvas type"
+--   }
+
+tacCheckCNF : Tactic
+tacCheckCNF =
+  { name = "check CNF"
   , fromCanvas = "TopLevelExpr"
   , params = []
   , run = \_ c -> case c of
-    MkCTopLevelExpr tle ->
-      case validateCNF tle.expr of
-        Ok branch ->
-          let st0 = { binds = [], firstUnused = 0 }
-              ( st1, dpllBranch ) = extractBranch st0 branch in
-              { varContext = tle.varContext
-              , branches = [ dpllBranch ]
-              , activeBranch = 0
-              , boundVars = st1.binds
-              } |> MkCDPLL |> Ok
-        Err err ->
-          ( "Expression not in conjunctive normal form:\n\n"
-          ++ String.concat (List.intersperse "\n\n" err)
-          ) |> Err
-    _ -> Err "Wrong canvas type"
+      MkCTopLevelExpr tle ->
+        case validateCNF tle.expr of
+          Ok clauses ->
+            { varContext = tle.varContext
+            , clauses = clauses
+            } |> MkCCNF1 |> Ok
+          Err err ->
+            ( "Expression not in conjunctive normal form:\n\n"
+            ++ String.concat (List.intersperse "\n\n" err)
+            ) |> Err
+      _ -> Err "Wrong canvas type"
   }
 
 
@@ -279,12 +299,8 @@ eqToBiImpl expr =
 
 -- Validation of CNF
 
-type alias Atom =
-  { get : ExprT
-  , negated : Bool
-  }
 
-validateCNF : ExprT -> Result (List String) (List (List Atom))
+validateCNF : ExprT -> Result (List String) (List (List (Atom ExprT)))
 validateCNF expr =
   case expr of
     ExprT "and" _ es ->
@@ -293,7 +309,7 @@ validateCNF expr =
       validateClause expr
       |> Result.map List.singleton
 
-validateClause : ExprT -> Result (List String) (List Atom)
+validateClause : ExprT -> Result (List String) (List (Atom ExprT))
 validateClause expr =
   case expr of
     ExprT "or" _ subExprs ->
@@ -302,50 +318,22 @@ validateClause expr =
       validateAtom expr
       |> Result.map List.singleton
 
-validateAtom : ExprT -> Result (List String) Atom
+validateAtom : ExprT -> Result (List String) (Atom ExprT)
 validateAtom expr =
   case expr of
     ExprT "not" _ [ subExpr ] ->
       validateProp subExpr
-      |> yielding { get = subExpr, negated = True }
+      |> yielding { prop = subExpr, negated = True }
     _ ->
       validateProp expr
-      |> yielding { get = expr, negated = False }
+      |> yielding { prop = expr, negated = False }
 
 validateProp : ExprT -> Result (List String) ()
 validateProp expr =
   if List.member (getHead expr) [ "and", "or", "not", "implies", "=>" ]
   || ((getHead expr == "if" || getHead expr == "ite") && getSort expr == BoolSort) then
-    Err [ "Expected an expression not in bool theory" ]
-  else
-    Ok ()
-
-type alias ExtractST =
-  { binds : List ( String, ExprT )
-  , firstUnused : Int
-  }
-
-extractBranch : ExtractST -> List (List Atom) -> ( ExtractST, DPLLBranch )
-extractBranch st llatoms =
-  extractClauses st llatoms
-  |> Tuple.mapSecond (\clauses -> { partialSol = [], clauses = clauses })
-
-extractClauses : ExtractST -> List (List Atom) -> ( ExtractST, List DPLLClause )
-extractClauses = listTraverseST extractClause
-
-extractClause : ExtractST -> List Atom -> ( ExtractST, DPLLClause )
-extractClause = listTraverseST extractAtom
-
-extractAtom : ExtractST -> Atom -> ( ExtractST, DPLLAtom )
-extractAtom st a =
-  case a.get of
-    ExprT boolVar BoolSort [] ->
-      ( st, { get = boolVar, negated = a.negated } )
-    _ -> case listSplitOnFirst (Tuple.second >> exprTEq a.get) st.binds of
-      Nothing ->
-        let var = "$" ++ (String.fromInt st.firstUnused)
-        in  Tuple.pair
-              { binds = ( var, a.get ) :: st.binds, firstUnused = st.firstUnused + 1 }
-              { get = var, negated = a.negated }
-      Just ( b1, b, b2 ) ->
-        ( { st | binds = b :: b1 ++ b2 }, { get = Tuple.first b, negated = a.negated } )
+    Err [ "Invalid base statement: " ++ exprTToString expr ]
+  else case expr of
+    ExprT "=" _ (ExprT _ BoolSort _ :: _) ->
+      Err [ "Invalid base statement: " ++ exprTToString expr ]
+    _ -> Ok ()

@@ -54,4 +54,13 @@ examples =
             ++ "  (or (not a) (not b) c)\n"
             ++ ")"
       }
+    , Tuple.pair "EUF+LRA"
+      { uninterpSorts = Array.empty
+      , variables = Array.fromList [ ( "x", "Real" ), ( "y", "Real" ), ( "f", "Real -> Real" ) ]
+      , expr = "(and\n"
+            ++ "(>= x y)\n"
+            ++ "(<= x y)\n"
+            ++ "(not (= (f (+ x 1)) (f (+ y 1))))\n"
+            ++ ")"
+      }
     ]
