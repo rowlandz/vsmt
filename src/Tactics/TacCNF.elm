@@ -1,11 +1,10 @@
 module Tactics.TacCNF exposing (tacExtractProps, tacPurify)
 
 import Common exposing (ST, listSplitOnFirst, getThenST, modifyThenST, returnST, traverseST, traverseThenST)
-import Data.Canvas exposing (Canvas(..), Atom)
-import Data.Typechecked exposing (ExprT(..), Sort(..), exprTEq, getHead, getSort, getSubs)
+import Data.Canvas exposing (Canvas(..), Atom, TheoryProp, VarContext)
+import Data.Typechecked exposing (ExprT(..), Sort(..), exprTEq, getSort)
 import Tactic exposing (Tactic)
 import Theories.All
-import Common exposing (listFindFirstWhere)
 
 tacExtractProps : Tactic
 tacExtractProps =
@@ -15,25 +14,31 @@ tacExtractProps =
   , run = \_ c -> case c of
       MkCCNF1 cnf ->
         let ( extracted, st ) = extractClauses cnf.clauses { binds = [], firstUnused = 1 } in
-        Ok (MkCCNF2 { varContext = cnf.varContext, clauses = extracted, binds = st.binds, firstUnused = st.firstUnused })
+        { varContext = cnf.varContext
+        , clauses = extracted
+        , binds = List.sortBy Tuple.first st.binds
+        , firstUnused = st.firstUnused
+        } |> MkCCNF2 |> Ok
       _ -> Err "Wrong canvas type"
   }
 
 tacPurify : Tactic
-tacPurify = 
+tacPurify =
   { name = "purify"
   , fromCanvas = "CNF2"
   , params = []
   , run = \_ c -> case c of
       MkCCNF2 cnf ->
-        let st1 = { firstUnused = cnf.firstUnused, equalities = [] }
-            ( purified, st2 ) = purifyExprs (List.map Tuple.second cnf.binds) st1
-            oldBinds = List.map2 Tuple.pair (List.map Tuple.first cnf.binds) purified
-            ( newBinds, _ ) = equalitiesToBinds st2.equalities st2.firstUnused in
+        let st1 = { firstUnused = cnf.firstUnused, theoryEqs = [], varContext = cnf.varContext }
+            ( theoryProps, st2 ) = traverseST purify cnf.binds st1
+            ( moreTheoryProps, _ ) = theoryEqsToTheoryProps st2.theoryEqs st2.firstUnused
+            moreClauses = List.map (\p -> [ { prop = p.name, negated = False } ]) moreTheoryProps
+        in
         { varContext = cnf.varContext
-        , branches = [ { clauses = cnf.clauses, partialSol = [] } ]
+        , branches = [ { clauses = cnf.clauses ++ moreClauses, partialSol = [] } ]
         , activeBranch = 0
-        , boundVars = oldBinds ++ newBinds
+        , theoryProps = theoryProps ++ moreTheoryProps
+        , showTheoryProps = True
         } |> MkCDPLL |> Ok
       _ -> Err "Wrong canvas type"
   }
@@ -69,49 +74,50 @@ extractClauses =
 
 -- Purification
 
+
+{-| Context for expression purification.
+  * `firstUnused` -- counts up to generate fresh names
+  * `equalities` -- (write only) accumulates equality lemmas
+  * `varContext` -- (read only) user-entered free variables and functions
+-}
 type alias PurifyST =
-  { firstUnused : Int
-  , equalities : List ExprT
+  { varContext : VarContext
+  , firstUnused : Int
+  , theoryEqs : List TheoryEq
   }
 
-theoryOf : ExprT -> String
-theoryOf e =
-  case  
-    Theories.All.all |> listFindFirstWhere
-      (\theory -> if theory.belongs e then Just theory.name else Nothing)
+type alias TheoryEq =
+  { name : String
+  , theory : String
+  , expr : ExprT
+  }
+
+purify : ( String, ExprT ) -> ST PurifyST TheoryProp
+purify ( name, expr ) =
+  getThenST <| \st ->
+  case
+    Theories.All.all |> listSplitOnFirst
+      (\theory -> theory.belongs st.varContext expr)
   of
-    Just ( _, theory, _ ) -> theory
-    Nothing -> "Unknown"
+    Just ( _, theory, _ ) ->
+      let ( purifiedExpr, spliceST ) = theory.purify expr { varContext = st.varContext, firstUnused = st.firstUnused, spliced = [] }
+          theoryProp = { name = name, expr = purifiedExpr, theory = theory.name }
+      in
+      modifyThenST (\s -> { s | firstUnused = spliceST.firstUnused }) <|
+      traverseThenST purify spliceST.spliced <| \theoryEqs ->
+      modifyThenST (\s -> { s | theoryEqs = theoryEqs ++ s.theoryEqs }) <|
+      returnST theoryProp
+    Nothing ->
+      returnST { name = name, expr = expr, theory = "???" }
 
-purifyExprs : List ExprT -> ST PurifyST (List ExprT)
-purifyExprs =
+theoryEqsToTheoryProps : List TheoryEq -> ST Int (List TheoryProp)
+theoryEqsToTheoryProps =
   traverseST <|
-  \expr ->
-    traverseThenST (purify (theoryOf expr)) (getSubs expr) <| \subs ->
-    returnST (ExprT (getHead expr) (getSort expr) subs)
-
-purify : String -> ExprT -> ST PurifyST ExprT
-purify contextTheory expr =
-  if List.isEmpty (getSubs expr) then
-    returnST expr
-  else
-    let exprTheory = theoryOf expr in
-    traverseThenST (purify exprTheory) (getSubs expr) <| \subs ->
-    let newExpr = ExprT (getHead expr) (getSort expr) subs in
-    if exprTheory == contextTheory then
-      returnST newExpr
-    else
-      getThenST <| \{ firstUnused, equalities } ->
-      let newVar = "$" ++ String.fromInt firstUnused
-          eqExpr = ExprT "=" BoolSort [ ExprT newVar (getSort expr) [], newExpr ] in
-      modifyThenST (\s -> { s | firstUnused = firstUnused + 1 }) <|
-      modifyThenST (\s -> { s | equalities = eqExpr :: equalities }) <|
-      returnST (ExprT newVar (getSort expr) [])
-
-equalitiesToBinds : List ExprT -> ST Int (List ( String, ExprT ))
-equalitiesToBinds =
-  traverseST <|
-  \eq ->
-    getThenST <| \i ->
-    modifyThenST (\_ -> i + 1) <|
-    returnST ( "$" ++ String.fromInt i, eq )
+    \eq ->
+      getThenST <| \i ->
+      modifyThenST (\_ -> i + 1) <|
+      returnST
+        { name = "$" ++ String.fromInt i
+        , theory = eq.theory
+        , expr = ExprT "=" BoolSort [ ExprT eq.name (getSort eq.expr) [], eq.expr ]
+        }

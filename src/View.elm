@@ -198,7 +198,7 @@ sortEntry idx sortName =
         , label = Input.labelHidden ("sort" ++ String.fromInt idx)
         , placeholder = Just (Input.placeholder [] (text "S"))
         }
-    , Input.button [ padding 5 ]
+    , Input.button attrsButton
         { onPress = Just (Event.UserDeletedSort idx)
         , label = text "Delete"
         }
@@ -298,8 +298,11 @@ cDPLL : Bool -> CDPLL -> Element Event
 cDPLL isTop dpll =
   column [ width fill, height fill, spacing 5 ]
     [ cDPLLTabs isTop dpll
-    , cDPLLClauseList dpll
-    , cDPLLBoundVars dpll.boundVars
+    , row [ width fill ]
+        [ cDPLLClauseList dpll
+        , cDPLLShowHideTheoryPropsButton dpll.showTheoryProps
+        ]
+    , if dpll.showTheoryProps then cDPLLTheoryProps dpll else Element.none
     ]
 
 cDPLLTabs : Bool -> CDPLL -> Element Event
@@ -342,6 +345,12 @@ cDPLLTabLabel partialSol =
     [] ->  text "⊤"
     _ -> text (String.concat (List.intersperse " " (List.map cDPLLAtomShort partialSol)))
 
+cDPLLShowHideTheoryPropsButton : Bool -> Element Event
+cDPLLShowHideTheoryPropsButton show =
+  Input.button (attrsButton ++ [ Element.alignBottom, Element.alignRight ])
+    { label = text (if show then "hide theory props" else "show theory props")
+    , onPress = Just (UserClickedShowHideTheoryProps (not show))
+    }
 
 cDPLLClauseList : CDPLL -> Element Event
 cDPLLClauseList dpll =
@@ -366,11 +375,11 @@ cDPLLAtomShort : DPLLAtom -> String
 cDPLLAtomShort { prop, negated } =
   if negated then "¬" ++ prop else prop
 
-cDPLLBoundVars : List ( String, ExprT ) -> Element Event
-cDPLLBoundVars binds =
+cDPLLTheoryProps : CDPLL -> Element Event
+cDPLLTheoryProps dpll =
   column [ Font.family [ Font.monospace ] ]
-    (binds |> List.map
-      (\(v, e) -> text (v ++ " := " ++ exprTToString e))
+    (dpll.theoryProps |> List.map
+      (\{ name, expr, theory } -> text (theory ++ ": " ++ name ++ " := " ++ exprTToString expr))
     )
 
 

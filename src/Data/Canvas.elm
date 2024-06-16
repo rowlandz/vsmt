@@ -55,7 +55,8 @@ type alias CDPLL =
   { varContext : VarContext
   , branches : List DPLLBranch
   , activeBranch : Int
-  , boundVars : List ( String, ExprT )
+  , theoryProps : List TheoryProp
+  , showTheoryProps : Bool
   }
 
 type alias DPLLBranch =
@@ -66,6 +67,12 @@ type alias DPLLBranch =
 type alias DPLLClause = List (Atom String)
 
 type alias DPLLAtom = Atom String
+
+type alias TheoryProp =
+  { name : String
+  , theory : String
+  , expr : ExprT
+  }
 
 activeBranch : CDPLL -> Maybe DPLLBranch
 activeBranch dpll =

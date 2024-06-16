@@ -192,6 +192,11 @@ getThenST thenDo = \s -> thenDo s s
 modifyThenST : (s -> s) -> ST s a -> ST s a
 modifyThenST f thenDo = f >> thenDo
 
+{-| Performs `firstDo` followed by `thenDo`. -}
+doThenST : ST s a -> (a -> ST s b) -> ST s b
+doThenST firstDo thenDo =
+  \s -> let ( a, s1 ) = firstDo s in thenDo a s1
+
 {-| Maps a state-transforming function over a list from left to right. -}
 traverseST : (a -> ST s b) -> List a -> ST s (List b)
 traverseST = traverseTailRec []

@@ -68,6 +68,11 @@ update event model =
           { model | topCanvas = MkCDPLL { dpll | activeBranch = idx } }
         _ -> model
 
+    UserClickedShowHideTheoryProps show ->
+      case model.topCanvas of
+        MkCDPLL dpll -> { model | topCanvas = MkCDPLL { dpll | showTheoryProps = show } }
+        _ -> model
+
     UserDeletedVar idx ->
       case model.topCanvas of
         MkCEntry entry ->

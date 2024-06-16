@@ -20,8 +20,10 @@ all =
   , TacCNF.tacExtractProps
   , TacCNF.tacPurify
   , TacDPLL.tacSplitOn
+  , TacDPLL.tacPropagateUnits
   , TacDPLL.tacPropagateUnit
   , TacDPLL.tacRemoveDuplicateAtoms
   , TacDPLL.tacFoundEmptyClause
   , TacDPLL.tacNoBranches
+  , TacDPLL.tacStartTheorySolvers
   ]

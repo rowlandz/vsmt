@@ -1,6 +1,6 @@
 module Tactics.TacDPLL exposing (..)
 
-import Common exposing (listDelete, listFindFirstWhere, listOneMustSucceed, listRemoveDuplicates, listReplace, listSplitOnFirst)
+import Common exposing (greedy1, listDelete, listFindFirstWhere, listOneMustSucceed, listRemoveDuplicates, listReplace, listSplitOnFirst)
 import Data.Canvas exposing (Canvas(..), DPLLBranch, DPLLClause, DPLLAtom, activeBranch, setActiveBranch)
 import Tactic exposing (Tactic)
 
@@ -22,6 +22,20 @@ tacSplitOn =
             Ok (MkCDPLL { dpll | branches = listReplace dpll.activeBranch [ b1, b2 ] dpll.branches })
           _ -> Err "Unexpected arguments"
         Nothing -> Err "Must have at least one branch"
+      _ -> Err "Wrong canvas type"
+  }
+
+tacPropagateUnits : Tactic
+tacPropagateUnits =
+  { name = "propagate units"
+  , fromCanvas = "DPLL"
+  , params = []
+  , run = \_ c -> case c of
+      MkCDPLL dpll -> case activeBranch dpll of
+        Just branch -> case greedy1 propagateFirstUnit branch of
+          Just newBranch -> Ok (MkCDPLL (setActiveBranch dpll newBranch))
+          Nothing -> Err "No unit clauses to propagate"
+        Nothing -> Err "Must have at least one branch to propagate units"
       _ -> Err "Wrong canvas type"
   }
 
@@ -83,8 +97,36 @@ tacNoBranches =
       _ -> Err "Wrong canvas type"
   }
 
+tacStartTheorySolvers : Tactic
+tacStartTheorySolvers =
+  { name = "start theory solvers"
+  , fromCanvas = "DPLL"
+  , params = []
+  , run = \_ c -> case c of
+      MkCDPLL dpll -> case activeBranch dpll of
+        Just branch ->
+          if List.length branch.clauses == 0 then
+            if List.length dpll.theoryProps > 0 then
+              Err "Unimpl"
+            else Err "There are no theory props, so no need to start theory solvers"
+          else Err "There are still clauses left"
+        Nothing -> Err "There is no active branch"
+      _ -> Err "Wrong canvas type"
+  }
+
 
 -- Helper functions for tactics
+
+
+{-| Tries to perform unit propagation on the first unit clause it can find. -}
+propagateFirstUnit : DPLLBranch -> Maybe DPLLBranch
+propagateFirstUnit branch =
+  listFindFirstWhere isUnitClause branch.clauses |> Maybe.map
+    (\( left, unit, right ) ->
+      { partialSol = branch.partialSol ++ [ unit ]
+      , clauses = List.filterMap (simplifyClauseAssuming unit) (left ++ right)
+      }
+    )
 
 
 {-| Tries to perform unit propagation with `var` or `(not var)`. -}
@@ -96,6 +138,13 @@ propagateUnit var branch =
       { partialSol = branch.partialSol ++ [ unit ]
       , clauses = List.filterMap (simplifyClauseAssuming unit) (left ++ right)
       } |> Ok
+
+{-| Checks if `clause` is a unit clause. -}
+isUnitClause : DPLLClause -> Maybe DPLLAtom
+isUnitClause clause =
+  case clause of
+    [ atom ] -> Just atom
+    _ -> Nothing
 
 {-| Checks if the `clause` is one of the unit clauses `var` or `(not var)`.
 Returns the atom on success, `Nothing` on failure. -}
