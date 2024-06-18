@@ -3,6 +3,7 @@ module Data.Canvas exposing (..)
 import Array exposing (Array)
 import Dict exposing (Dict)
 import Common exposing (listGet, listSet)
+import Data.Fract exposing (Fract)
 import Data.Typechecked exposing (Sort, FuncType, ExprT)
 
 type Canvas
@@ -11,6 +12,7 @@ type Canvas
   | MkCCNF1 CCNF1
   | MkCCNF2 CCNF2
   | MkCDPLL CDPLL
+  | MkCLRA CLRA
   | MkCUnsat
 
 type alias CEntry =
@@ -53,13 +55,17 @@ type alias CCNF2 =
 
 type alias CDPLL =
   { varContext : VarContext
-  , branches : List DPLLBranch
+  , branches : List Branch
   , activeBranch : Int
   , theoryProps : List TheoryProp
   , showTheoryProps : Bool
   }
 
-type alias DPLLBranch =
+type Branch
+  = MkSATBranch SATBranch
+  | MkTheoryBranch TheoryBranch
+
+type alias SATBranch =
   { clauses : List DPLLClause
   , partialSol : List (Atom String)
   }
@@ -74,13 +80,38 @@ type alias TheoryProp =
   , expr : ExprT
   }
 
-activeBranch : CDPLL -> Maybe DPLLBranch
+type alias TheoryBranch =
+  { partialSol : List (Atom String)
+  , theoryCanvases : List Canvas
+  }
+
+activeBranch : CDPLL -> Maybe Branch
 activeBranch dpll =
   listGet dpll.activeBranch dpll.branches
 
-setActiveBranch : CDPLL -> DPLLBranch -> CDPLL
+setActiveBranch : CDPLL -> Branch -> CDPLL
 setActiveBranch dpll branch =
   { dpll | branches = listSet dpll.activeBranch branch dpll.branches }
+
+partialSolution : Branch -> List (Atom String)
+partialSolution branch =
+  case branch of
+    MkSATBranch b -> b.partialSol
+    MkTheoryBranch b -> b.partialSol
+
+
+
+-- LRA
+
+
+type alias CLRA =
+  { colLabels : List String
+  , tableau : List TableauRow
+  }
+
+-- TODO: change number to Fraction
+type alias TableauRow = List Fract
+
 
 
 -- Shared
@@ -99,4 +130,5 @@ getCanvasType canvas =
     MkCCNF1 _         -> "CNF1"
     MkCCNF2 _         -> "CNF2"
     MkCDPLL _         -> "DPLL"
+    MkCLRA _          -> "LRA"
     MkCUnsat          -> "Unsat"

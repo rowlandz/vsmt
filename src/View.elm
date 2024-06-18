@@ -12,6 +12,7 @@ import Html.Attributes
 import Html.Events
 import Common exposing (listIndexedMap2)
 import Data.Canvas as Canvas exposing (..)
+import Data.Fract as Fract
 import Data.Typechecked exposing (ExprT, exprTToString)
 import Event exposing (Event(..))
 import ExampleEntries
@@ -152,6 +153,7 @@ viewCanvas isTop canvas =
         Canvas.MkCCNF1 c -> cCNF1 c
         Canvas.MkCCNF2 c -> cCNF2 c
         Canvas.MkCDPLL c -> cDPLL isTop c
+        Canvas.MkCLRA c -> cLRA c
         Canvas.MkCUnsat -> cUnsat
       )
     )
@@ -316,7 +318,7 @@ cDPLLTabs isTop dpll =
         (text "DPLL")
     , row []
         (dpll.branches
-        |> List.map .partialSol
+        |> List.map partialSolution
         |> List.indexedMap (cDPLLTab isTop dpll.activeBranch)
         )
     , el
@@ -355,13 +357,13 @@ cDPLLShowHideTheoryPropsButton show =
 cDPLLClauseList : CDPLL -> Element Event
 cDPLLClauseList dpll =
   case activeBranch dpll of
-    Just branch -> case branch.clauses of
+    Just (MkSATBranch branch) -> case branch.clauses of
       [] ->
         el [ Font.italic, Font.family [ Font.sansSerif ] ] (text "no clauses")
       _ :: _ -> 
         column [ spacing 5, Font.family [ Font.monospace ] ]
           (List.map cDPLLClause branch.clauses)
-    Nothing -> Element.none
+    _ -> Element.none
 
 cDPLLClause : DPLLClause -> Element Event
 cDPLLClause clause =
@@ -381,6 +383,27 @@ cDPLLTheoryProps dpll =
     (dpll.theoryProps |> List.map
       (\{ name, expr, theory } -> text (theory ++ ": " ++ name ++ " := " ++ exprTToString expr))
     )
+
+
+
+-- CLRA
+
+
+cLRA : CLRA -> Element Event
+cLRA lra =
+  column [ Font.family [ Font.monospace ] ]
+    ( cLRARow lra.colLabels
+   :: List.map (List.map Fract.toString >> cLRARow) lra.tableau
+    )
+
+cLRARow : List String -> Element Event
+cLRARow entries =
+  entries
+  |> List.map (String.slice 0 5 >> String.padRight 5 ' ')
+  |> List.intersperse " "
+  |> String.concat
+  |> text
+
 
 
 

@@ -5,6 +5,7 @@ import Data.Canvas exposing (Canvas(..), Atom, TheoryProp, VarContext)
 import Data.Typechecked exposing (ExprT(..), Sort(..), exprTEq, getSort)
 import Tactic exposing (Tactic)
 import Theories.All
+import Data.Canvas exposing (Branch(..))
 
 tacExtractProps : Tactic
 tacExtractProps =
@@ -35,7 +36,7 @@ tacPurify =
             moreClauses = List.map (\p -> [ { prop = p.name, negated = False } ]) moreTheoryProps
         in
         { varContext = cnf.varContext
-        , branches = [ { clauses = cnf.clauses ++ moreClauses, partialSol = [] } ]
+        , branches = [ MkSATBranch { clauses = cnf.clauses ++ moreClauses, partialSol = [] } ]
         , activeBranch = 0
         , theoryProps = theoryProps ++ moreTheoryProps
         , showTheoryProps = True
@@ -77,7 +78,7 @@ extractClauses =
 
 {-| Context for expression purification.
   * `firstUnused` -- counts up to generate fresh names
-  * `equalities` -- (write only) accumulates equality lemmas
+  * `theoryEqs` -- (write only) accumulates equality lemmas
   * `varContext` -- (read only) user-entered free variables and functions
 -}
 type alias PurifyST =

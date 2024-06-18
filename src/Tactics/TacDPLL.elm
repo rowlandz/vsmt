@@ -1,8 +1,10 @@
 module Tactics.TacDPLL exposing (..)
 
 import Common exposing (greedy1, listDelete, listFindFirstWhere, listOneMustSucceed, listRemoveDuplicates, listReplace, listSplitOnFirst)
-import Data.Canvas exposing (Canvas(..), DPLLBranch, DPLLClause, DPLLAtom, activeBranch, setActiveBranch)
+import Data.Canvas exposing (Canvas(..), DPLLClause, DPLLAtom, activeBranch, setActiveBranch)
 import Tactic exposing (Tactic)
+import Data.Canvas exposing (SATBranch)
+import Data.Canvas exposing (Branch(..))
 
 
 
@@ -16,11 +18,12 @@ tacSplitOn =
   , params = [ "x" ]
   , run = \args c -> case c of
       MkCDPLL dpll -> case activeBranch dpll of
-        Just branch -> case args of
+        Just (MkSATBranch branch) -> case args of
           [ x ] ->
             let ( b1, b2 ) = splitOn x branch in
-            Ok (MkCDPLL { dpll | branches = listReplace dpll.activeBranch [ b1, b2 ] dpll.branches })
+            Ok (MkCDPLL { dpll | branches = listReplace dpll.activeBranch [ MkSATBranch b1, MkSATBranch b2 ] dpll.branches })
           _ -> Err "Unexpected arguments"
+        Just _ -> Err "Expected SAT branch"
         Nothing -> Err "Must have at least one branch"
       _ -> Err "Wrong canvas type"
   }
@@ -32,9 +35,10 @@ tacPropagateUnits =
   , params = []
   , run = \_ c -> case c of
       MkCDPLL dpll -> case activeBranch dpll of
-        Just branch -> case greedy1 propagateFirstUnit branch of
-          Just newBranch -> Ok (MkCDPLL (setActiveBranch dpll newBranch))
+        Just (MkSATBranch branch) -> case greedy1 propagateFirstUnit branch of
+          Just newBranch -> Ok (MkCDPLL (setActiveBranch dpll (MkSATBranch newBranch)))
           Nothing -> Err "No unit clauses to propagate"
+        Just _ -> Err "Expected SAT branch"
         Nothing -> Err "Must have at least one branch to propagate units"
       _ -> Err "Wrong canvas type"
   }
@@ -47,9 +51,10 @@ tacPropagateUnit =
   , run = \args c -> case c of
       MkCDPLL dpll -> case args of
         [ x ] -> case activeBranch dpll of
-          Just branch ->
+          Just (MkSATBranch branch) ->
             propagateUnit x branch
-            |> Result.map (setActiveBranch dpll >> MkCDPLL)
+            |> Result.map (MkSATBranch >> setActiveBranch dpll >> MkCDPLL)
+          Just _ -> Err "Expected SAT branch"
           Nothing -> Err "Must have at least one branch to propagate unit"
         _ -> Err "Invalid arguments"
       _ -> Err "Wrong canvas type"
@@ -62,10 +67,11 @@ tacRemoveDuplicateAtoms =
   , params = []
   , run = \_ c -> case c of
       MkCDPLL dpll -> case activeBranch dpll of
-        Just branch -> case listOneMustSucceed removeDuplicateAtoms branch.clauses of
+        Just (MkSATBranch branch) -> case listOneMustSucceed removeDuplicateAtoms branch.clauses of
           Just newClauses ->
-            Ok (MkCDPLL (setActiveBranch dpll { branch | clauses = newClauses }))
+            Ok (MkCDPLL (setActiveBranch dpll (MkSATBranch { branch | clauses = newClauses })))
           Nothing -> Err "Nothing to simplify"
+        Just _ -> Err "Expected SAT branch"
         Nothing -> Err "Must have at least one branch"
       _ -> Err "Wrong canvas type"
   }
@@ -77,10 +83,11 @@ tacFoundEmptyClause =
   , params = []
   , run = \_ c -> case c of
       MkCDPLL dpll -> case activeBranch dpll of
-        Just branch ->
+        Just (MkSATBranch branch) ->
           if List.any List.isEmpty branch.clauses then
             Ok (MkCDPLL { dpll | branches = listDelete dpll.activeBranch dpll.branches })
           else Err "No empty clause found"
+        Just _ -> Err "Expected SAT branch"
         Nothing -> Err "Must have at least one branch"
       _ -> Err "Wrong canvas type"
   }
@@ -104,12 +111,13 @@ tacStartTheorySolvers =
   , params = []
   , run = \_ c -> case c of
       MkCDPLL dpll -> case activeBranch dpll of
-        Just branch ->
+        Just (MkSATBranch branch) ->
           if List.length branch.clauses == 0 then
             if List.length dpll.theoryProps > 0 then
               Err "Unimpl"
             else Err "There are no theory props, so no need to start theory solvers"
           else Err "There are still clauses left"
+        Just _ -> Err "Expected a SAT branch"
         Nothing -> Err "There is no active branch"
       _ -> Err "Wrong canvas type"
   }
@@ -119,7 +127,7 @@ tacStartTheorySolvers =
 
 
 {-| Tries to perform unit propagation on the first unit clause it can find. -}
-propagateFirstUnit : DPLLBranch -> Maybe DPLLBranch
+propagateFirstUnit : SATBranch -> Maybe SATBranch
 propagateFirstUnit branch =
   listFindFirstWhere isUnitClause branch.clauses |> Maybe.map
     (\( left, unit, right ) ->
@@ -130,7 +138,7 @@ propagateFirstUnit branch =
 
 
 {-| Tries to perform unit propagation with `var` or `(not var)`. -}
-propagateUnit : String -> DPLLBranch -> Result String DPLLBranch
+propagateUnit : String -> SATBranch -> Result String SATBranch
 propagateUnit var branch =
   case listFindFirstWhere (isUnitClauseOf var) branch.clauses of
     Nothing -> Err ("Could not find unit clause of variable " ++ var)
@@ -155,7 +163,7 @@ isUnitClauseOf var clause =
     _ -> Nothing
 
 {-| Applies the splitting rule. -}
-splitOn : String -> DPLLBranch -> ( DPLLBranch, DPLLBranch )
+splitOn : String -> SATBranch -> ( SATBranch, SATBranch )
 splitOn var branch =
   let varTrue = { prop = var, negated = False }
       varFalse = { prop = var, negated = True } in

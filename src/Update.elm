@@ -109,10 +109,10 @@ update event model =
 
     UserSelectedExample example ->
       case Dict.get example ExampleEntries.examples of
-        Just centry ->
-          { topCanvas = MkCEntry centry
+        Just canvas ->
+          { topCanvas = canvas
           , canvasHistory = []
-          , tacticSelectors = makeTacticSelectorsFor "Entry"
+          , tacticSelectors = makeTacticSelectorsFor (getCanvasType canvas)
           , messagePanelText = ""
           }
         Nothing -> model |> withMsg ("Example " ++ example ++ " not found")
