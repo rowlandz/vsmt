@@ -1,10 +1,10 @@
 module Theories.EUF exposing (euf)
 
 import Dict
-import Data.Typechecked exposing (ExprT(..), Sort(..), getHead)
-import Theory exposing (Theory)
 import Common exposing (inspectThenST, returnST)
-import Theory exposing (assignNew, purifySubExprs)
+import Data.Canvas exposing (Canvas(..))
+import Data.Typechecked exposing (ExprT(..), Sort(..), getHead)
+import Theory exposing (Theory, assignNew, purifySubExprs)
 
 euf : Theory
 euf =
@@ -29,4 +29,6 @@ euf =
           Just _ ->
             purifySubExprs euf.purify expr
           Nothing -> assignNew expr
+
+  , init = \exprs -> Ok (MkCEUF exprs)
   }

@@ -12,7 +12,9 @@ type Canvas
   | MkCCNF1 CCNF1
   | MkCCNF2 CCNF2
   | MkCDPLL CDPLL
+  | MkCEUF CEUF
   | MkCLRA CLRA
+  | MkCSimplex CSimplex
   | MkCUnsat
 
 type alias CEntry =
@@ -83,6 +85,7 @@ type alias TheoryProp =
 type alias TheoryBranch =
   { partialSol : List (Atom String)
   , theoryCanvases : List Canvas
+  , activeTheory : Int
   }
 
 activeBranch : CDPLL -> Maybe Branch
@@ -93,6 +96,10 @@ setActiveBranch : CDPLL -> Branch -> CDPLL
 setActiveBranch dpll branch =
   { dpll | branches = listSet dpll.activeBranch branch dpll.branches }
 
+activeTheory : TheoryBranch -> Maybe Canvas
+activeTheory branch =
+  listGet branch.activeTheory branch.theoryCanvases
+
 partialSolution : Branch -> List (Atom String)
 partialSolution branch =
   case branch of
@@ -101,10 +108,19 @@ partialSolution branch =
 
 
 
+-- EUF
+
+
+type alias CEUF = List ExprT
+
+
+
 -- LRA
 
 
-type alias CLRA =
+type alias CLRA = List ExprT
+
+type alias CSimplex =
   { colLabels : List String
   , tableau : List TableauRow
   }
@@ -130,5 +146,7 @@ getCanvasType canvas =
     MkCCNF1 _         -> "CNF1"
     MkCCNF2 _         -> "CNF2"
     MkCDPLL _         -> "DPLL"
+    MkCEUF _          -> "EUF"
     MkCLRA _          -> "LRA"
+    MkCSimplex _      -> "Simplex"
     MkCUnsat          -> "Unsat"

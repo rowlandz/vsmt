@@ -1,5 +1,6 @@
 module Theories.LRA exposing (lra)
 
+import Data.Canvas exposing (Canvas(..))
 import Data.Typechecked exposing (ExprT(..), Sort(..), getHead, getSort, getSubs)
 import Theory exposing (Theory, assignNew, purifySubExprs)
 import Common exposing (returnST)
@@ -31,6 +32,8 @@ lra =
         returnST expr
       else
         assignNew expr
+
+  , init = \exprs -> Ok (MkCLRA exprs)
   }
 
 isRealLiteral : ExprT -> Bool

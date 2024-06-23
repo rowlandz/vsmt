@@ -72,8 +72,8 @@ examples =
                 ++ ")"
           }
         )
-    , Tuple.pair "Simple LRA"
-        (MkCLRA
+    , Tuple.pair "Simple Simplex"
+        (MkCSimplex
           { colLabels = [ "x", "y", "s1", "s2" ]
           , tableau =
               [ [ Fract.mk_ 1 1, Fract.mk_ 1 1, Fract.mk_ 1 1, Fract.mk_ 0 1, Fract.mk_ -2 1 ]

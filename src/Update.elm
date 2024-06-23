@@ -73,6 +73,15 @@ update event model =
         MkCDPLL dpll -> { model | topCanvas = MkCDPLL { dpll | showTheoryProps = show } }
         _ -> model
 
+    UserClickedTheoryTab idx ->
+      case model.topCanvas of
+        MkCDPLL dpll -> case activeBranch dpll of
+          Just (MkTheoryBranch branch) ->
+            let newBranch = { branch | activeTheory = idx } in
+            { model | topCanvas = MkCDPLL (setActiveBranch dpll (MkTheoryBranch newBranch)) }
+          _ -> model
+        _ -> model
+
     UserDeletedVar idx ->
       case model.topCanvas of
         MkCEntry entry ->

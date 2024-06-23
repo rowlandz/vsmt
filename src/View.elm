@@ -137,26 +137,29 @@ canavsHistory model =
     , Element.scrollbarY
     , Element.clipX
     ]
-    (viewCanvas True model.topCanvas :: List.map (viewCanvas False) model.canvasHistory)
+    (viewCanvasWithBorder True model.topCanvas :: List.map (viewCanvasWithBorder False) model.canvasHistory)
+
+viewCanvasWithBorder : Bool -> Canvas -> Element Event
+viewCanvasWithBorder isTop canvas =
+  el
+    [ padding 5
+    , width fill
+    , Border.width 1, Border.color grey3, Border.rounded 5
+    ]
+    (viewCanvas isTop canvas)
 
 viewCanvas : Bool -> Canvas -> Element Event
 viewCanvas isTop canvas =
-  el [ padding 5, width fill ]
-    (el
-      [ padding 5
-      , width fill
-      , Border.width 1, Border.color grey3, Border.rounded 5
-      ]
-      (case canvas of
-        Canvas.MkCEntry c -> cEntry c
-        Canvas.MkCTopLevelExpr c -> cTopLevelExpr c
-        Canvas.MkCCNF1 c -> cCNF1 c
-        Canvas.MkCCNF2 c -> cCNF2 c
-        Canvas.MkCDPLL c -> cDPLL isTop c
-        Canvas.MkCLRA c -> cLRA c
-        Canvas.MkCUnsat -> cUnsat
-      )
-    )
+  case canvas of
+    Canvas.MkCEntry c -> cEntry c
+    Canvas.MkCTopLevelExpr c -> cTopLevelExpr c
+    Canvas.MkCCNF1 c -> cCNF1 c
+    Canvas.MkCCNF2 c -> cCNF2 c
+    Canvas.MkCDPLL c -> cDPLL isTop c
+    Canvas.MkCEUF c -> cEUF c
+    Canvas.MkCLRA c -> cLRA c
+    Canvas.MkCSimplex c -> cSimplex c
+    Canvas.MkCUnsat -> cUnsat
 
 
 
@@ -300,11 +303,7 @@ cDPLL : Bool -> CDPLL -> Element Event
 cDPLL isTop dpll =
   column [ width fill, height fill, spacing 5 ]
     [ cDPLLTabs isTop dpll
-    , row [ width fill ]
-        [ cDPLLClauseList dpll
-        , cDPLLShowHideTheoryPropsButton dpll.showTheoryProps
-        ]
-    , if dpll.showTheoryProps then cDPLLTheoryProps dpll else Element.none
+    , cDPLLMainContent isTop dpll
     ]
 
 cDPLLTabs : Bool -> CDPLL -> Element Event
@@ -354,16 +353,31 @@ cDPLLShowHideTheoryPropsButton show =
     , onPress = Just (UserClickedShowHideTheoryProps (not show))
     }
 
-cDPLLClauseList : CDPLL -> Element Event
-cDPLLClauseList dpll =
+cDPLLMainContent : Bool -> CDPLL -> Element Event
+cDPLLMainContent isTop dpll =
   case activeBranch dpll of
-    Just (MkSATBranch branch) -> case branch.clauses of
-      [] ->
-        el [ Font.italic, Font.family [ Font.sansSerif ] ] (text "no clauses")
-      _ :: _ -> 
-        column [ spacing 5, Font.family [ Font.monospace ] ]
-          (List.map cDPLLClause branch.clauses)
-    _ -> Element.none
+    Just (MkSATBranch branch) -> cDPLLSATBranchContent dpll branch
+    Just (MkTheoryBranch branch) -> cDPLLTheoryContent isTop branch
+    Nothing -> Element.none
+
+cDPLLSATBranchContent : CDPLL -> SATBranch -> Element Event
+cDPLLSATBranchContent dpll branch =
+  column [ width fill, height fill ]
+    [ row [ width fill ]
+        [ cDPLLClauseList branch
+        , cDPLLShowHideTheoryPropsButton dpll.showTheoryProps
+        ]
+    , if dpll.showTheoryProps then cDPLLTheoryProps dpll else Element.none
+    ]
+
+cDPLLClauseList : SATBranch -> Element Event
+cDPLLClauseList branch =
+  case branch.clauses of
+    [] ->
+      el [ Font.italic, Font.family [ Font.sansSerif ] ] (text "no clauses")
+    _ :: _ -> 
+      column [ spacing 5, Font.family [ Font.monospace ] ]
+        (List.map cDPLLClause branch.clauses)
 
 cDPLLClause : DPLLClause -> Element Event
 cDPLLClause clause =
@@ -384,6 +398,56 @@ cDPLLTheoryProps dpll =
       (\{ name, expr, theory } -> text (theory ++ ": " ++ name ++ " := " ++ exprTToString expr))
     )
 
+cDPLLTheoryContent : Bool -> TheoryBranch -> Element Event
+cDPLLTheoryContent isTop branch =
+  column [ width fill, height fill, spacing 5 ]
+    [ cDPLLTheoryTabs True branch
+    , cDPLLTheoryMainContent isTop branch
+    ]
+
+cDPLLTheoryTabs : Bool -> TheoryBranch -> Element Event
+cDPLLTheoryTabs isTop branch =
+  row [ width fill ]
+    [ row []
+        (branch.theoryCanvases
+        |> List.map getCanvasType
+        |> List.indexedMap (cDPLLTheoryTab isTop branch.activeTheory)
+        )
+    , el
+        [ width fill, height fill, padding 5
+        , Font.italic, Font.family [ Font.sansSerif ]
+        , Border.widthEach { noBorders | bottom = 1 }
+        , Border.color grey3
+        ]
+        (if branch.theoryCanvases == [] then text "no theories" else Element.none)
+    ]
+
+cDPLLTheoryTab : Bool -> Int -> Int -> String -> Element Event
+cDPLLTheoryTab isTop activeTab idx theoryName =
+  if isTop then
+    Input.button (attrsTab (activeTab == idx))
+      { label = text theoryName
+      , onPress = Just (UserClickedTheoryTab idx)
+      }
+  else
+    el (attrsTab (activeTab == idx)) (text theoryName)
+
+
+cDPLLTheoryMainContent : Bool -> TheoryBranch -> Element Event
+cDPLLTheoryMainContent isTop branch =
+  case activeTheory branch of
+    Just c -> viewCanvas isTop c
+    Nothing -> Element.none
+
+
+-- EUF
+
+
+cEUF : CEUF -> Element Event
+cEUF euf =
+  column [ padding 5, spacing 5, Font.family [ Font.monospace ] ]
+    (List.map (exprTToString >> text) euf)
+
 
 
 -- CLRA
@@ -391,13 +455,18 @@ cDPLLTheoryProps dpll =
 
 cLRA : CLRA -> Element Event
 cLRA lra =
+  column [ padding 5, spacing 5, Font.family [ Font.monospace ] ]
+    (List.map (exprTToString >> text) lra)
+
+cSimplex : CSimplex -> Element Event
+cSimplex simplex =
   column [ Font.family [ Font.monospace ] ]
-    ( cLRARow lra.colLabels
-   :: List.map (List.map Fract.toString >> cLRARow) lra.tableau
+    ( cSimplexRow simplex.colLabels
+   :: List.map (List.map Fract.toString >> cSimplexRow) simplex.tableau
     )
 
-cLRARow : List String -> Element Event
-cLRARow entries =
+cSimplexRow : List String -> Element Event
+cSimplexRow entries =
   entries
   |> List.map (String.slice 0 5 >> String.padRight 5 ' ')
   |> List.intersperse " "

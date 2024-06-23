@@ -13,6 +13,7 @@ type Event
   | UserChangedText String
   | UserClickedDPLLTab Int
   | UserClickedShowHideTheoryProps Bool
+  | UserClickedTheoryTab Int
   | UserChangedTacticArg Int Int String
   | UserClickedTactic TacticSelector
   | UserClickedUndo

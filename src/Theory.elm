@@ -1,12 +1,14 @@
 module Theory exposing (..)
 
 import Common exposing (ST, getThenST, modifyThenST, returnST, traverseThenST)
+import Data.Canvas exposing (Canvas)
 import Data.Typechecked exposing (ExprT(..), Sort(..), VarContext, getHead, getSort, getSubs)
 
 type alias Theory =
   { name : String
   , belongs : VarContext -> ExprT -> Bool
   , purify : ExprT -> ST SpliceST ExprT
+  , init : List ExprT -> Result (List String) Canvas
   }
 
 {-| Context for expression splicing.
